@@ -88,7 +88,9 @@ export function OpportunitiesTable({
   };
 
   const getPositionBadge = (pos: number) => {
-    if (pos <= 12)
+    if (pos < 10)
+      return { bg: "bg-seo-green/10", text: "text-seo-green", label: "Quase top 10" };
+    if (pos <= 15)
       return { bg: "bg-seo-yellow/10", text: "text-seo-yellow", label: "Quase lá" };
     if (pos <= 20)
       return { bg: "bg-seo-orange/10", text: "text-seo-orange", label: "2ª página" };
@@ -218,7 +220,7 @@ export function OpportunitiesTable({
                       {opp.position.toFixed(1)}
                     </td>
                     <td className="px-5 py-3 text-xs text-white/40">
-                      {(opp.ctr * 100).toFixed(1)}%
+                      {opp.ctr.toFixed(1)}%
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1.5">

@@ -190,18 +190,35 @@ export async function getQueryPageData(
 }
 
 export function findQuickWins(rows: GSCQueryPageRow[]): Opportunity[] {
-  return rows
+  if (!rows.length) return [];
+
+  const validRows = rows.filter(
+    (r) => r.query && r.page && r.impressions > 0 && r.position > 0
+  );
+  if (!validRows.length) return [];
+
+  const impressionThreshold = Math.max(
+    20,
+    percentile(validRows.map((r) => r.impressions), 70)
+  );
+
+  return validRows
+    .map((r) => ({
+      ...r,
+      ctr: normalizeCtr(r.ctr),
+    }))
     .filter((r) => {
       return (
-        r.impressions > 100 &&  // tem demanda (lowered for smaller sites)
-        r.position > 8 &&       // não está bem posicionado
-        r.position < 25         // ainda é recuperável
+        r.impressions >= impressionThreshold &&
+        r.position >= 5 &&
+        r.position <= 30 &&
+        r.ctr < 0.05
       );
     })
     .map((r) => {
       const score =
         r.impressions *
-        (1 / r.position) *
+        (1 / Math.max(r.position, 1)) *
         (1 - r.ctr);
 
       return {
@@ -209,17 +226,28 @@ export function findQuickWins(rows: GSCQueryPageRow[]): Opportunity[] {
         url: r.page,
         impressions: r.impressions,
         clicks: r.clicks,
-        position: r.position,
-        ctr: r.ctr,
-        score,
-        reason:
-          r.position <= 15
-            ? "Quase na 1ª página — empurrão rápido"
-            : "Alta impressão + posição ruim — oportunidade direta",
+        ctr: Number((r.ctr * 100).toFixed(2)),
+        position: Number(r.position.toFixed(1)),
+        score: Number(score.toFixed(2)),
+        reason: `Impressões acima do corte (${impressionThreshold}) + posição entre 5 e 30 + CTR baixo`,
       };
     })
     .sort((a, b) => b.score - a.score)
-    .slice(0, 15);
+    .slice(0, 10);
+}
+
+function normalizeCtr(ctr: number): number {
+  return ctr > 1 ? ctr / 100 : ctr;
+}
+
+function percentile(values: number[], p: number): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.floor((p / 100) * sorted.length)
+  );
+  return sorted[index];
 }
 
 /**
