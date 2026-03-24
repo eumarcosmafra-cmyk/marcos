@@ -1,22 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import {
-  TrendingUp,
-  Search,
   Users,
   Globe,
   Eye,
   MousePointerClick,
-  Activity,
-  Gauge,
+  Percent,
+  Hash,
   Plus,
   ArrowRight,
   LogIn,
+  RefreshCw,
 } from "lucide-react";
-import { ScoreRing } from "@/components/ui/score-ring";
 import { cn, formatNumber } from "@/lib/utils";
 import { GSCOverviewCard } from "@/components/gsc/gsc-overview-card";
 import { GSCSiteSelector } from "@/components/gsc/gsc-site-selector";
@@ -26,26 +24,36 @@ export default function DashboardPage() {
   const { data: session } = useSession();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [selectedGSCSite, setSelectedGSCSite] = useState("");
 
+  const syncGSCSites = useCallback(async () => {
+    if (!session?.accessToken) return;
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/gsc/sync", { method: "POST" });
+      const json = await res.json();
+      if (json.clients) setClients(json.clients);
+    } catch {}
+    setSyncing(false);
+  }, [session?.accessToken]);
+
   useEffect(() => {
-    fetch("/api/clients")
-      .then((res) => res.json())
-      .then((data) => {
-        setClients(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
+    if (session?.accessToken) {
+      // Auto-sync GSC sites as clients
+      syncGSCSites().then(() => setLoading(false));
+    } else {
+      fetch("/api/clients")
+        .then((res) => res.json())
+        .then((data) => {
+          setClients(Array.isArray(data) ? data : []);
+          setLoading(false);
+        })
+        .catch(() => setLoading(false));
+    }
+  }, [session?.accessToken, syncGSCSites]);
 
   const activeClients = clients.filter((c) => c.status === "active");
-  const avgScore =
-    activeClients.length > 0
-      ? Math.round(
-          activeClients.reduce((sum, c) => sum + (c.currentScore || 0), 0) /
-            activeClients.length
-        )
-      : 0;
 
   const totalImpressions = clients.reduce(
     (sum, c) => sum + (c.indicators?.impressions || 0),
@@ -55,6 +63,13 @@ export default function DashboardPage() {
     (sum, c) => sum + (c.indicators?.clicks || 0),
     0
   );
+  const avgCtr =
+    totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+  const avgPosition =
+    activeClients.length > 0
+      ? activeClients.reduce((s, c) => s + (c.indicators?.position || 0), 0) /
+        activeClients.length
+      : 0;
 
   return (
     <div className="space-y-6">
@@ -63,64 +78,67 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-xl font-bold text-white">Dashboard</h1>
           <p className="text-sm text-white/40">
-            Visão geral dos seus clientes e projetos
+            Visão geral dos seus sites e projetos
           </p>
         </div>
-        <Link
-          href="/clients"
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Novo Projeto
-        </Link>
+        <div className="flex items-center gap-2">
+          {session?.accessToken && (
+            <button
+              onClick={syncGSCSites}
+              disabled={syncing}
+              className="btn-secondary flex items-center gap-2 text-xs"
+            >
+              <RefreshCw className={cn("h-3 w-3", syncing && "animate-spin")} />
+              Sincronizar
+            </button>
+          )}
+          <Link href="/clients" className="btn-primary flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Novo Projeto
+          </Link>
+        </div>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          {
-            label: "Clientes Ativos",
-            value: activeClients.length.toString(),
-            icon: Users,
-            detail: `${clients.length} total`,
-          },
-          {
-            label: "Score Médio",
-            value: avgScore.toString(),
-            icon: TrendingUp,
-            detail: "dos ativos",
-          },
-          {
-            label: "Impressões Totais",
-            value: formatNumber(totalImpressions),
-            icon: Eye,
-            detail: "todos os projetos",
-          },
-          {
-            label: "Cliques Totais",
-            value: formatNumber(totalClicks),
-            icon: MousePointerClick,
-            detail: "todos os projetos",
-          },
-        ].map((stat) => (
-          <div key={stat.label} className="glass-card p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <stat.icon className="h-4 w-4 text-white/30" />
-              <span className="text-[10px] text-brand-400">{stat.detail}</span>
-            </div>
-            <p className="text-2xl font-bold text-white">{stat.value}</p>
-            <p className="text-xs text-white/40">{stat.label}</p>
-          </div>
-        ))}
+        <StatCard
+          icon={Users}
+          label="Sites Ativos"
+          value={activeClients.length.toString()}
+          detail={`${clients.length} total`}
+        />
+        <StatCard
+          icon={Eye}
+          label="Impressões (28d)"
+          value={formatNumber(totalImpressions)}
+          detail="todos os sites"
+        />
+        <StatCard
+          icon={MousePointerClick}
+          label="Cliques (28d)"
+          value={formatNumber(totalClicks)}
+          detail="todos os sites"
+        />
+        <StatCard
+          icon={Percent}
+          label="CTR Médio"
+          value={`${avgCtr.toFixed(1)}%`}
+          detail="todos os sites"
+        />
       </div>
 
       {/* Google Search Console */}
       {session?.accessToken ? (
         <div className="space-y-4">
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold text-white">Google Search Console</h2>
+            <h2 className="text-sm font-semibold text-white">
+              Google Search Console
+            </h2>
             <div className="w-64">
-              <GSCSiteSelector selectedSite={selectedGSCSite} onSelect={setSelectedGSCSite} />
+              <GSCSiteSelector
+                selectedSite={selectedGSCSite}
+                onSelect={setSelectedGSCSite}
+              />
             </div>
           </div>
           {selectedGSCSite && <GSCOverviewCard siteUrl={selectedGSCSite} />}
@@ -135,11 +153,18 @@ export default function DashboardPage() {
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
             </svg>
             <div>
-              <p className="text-sm text-white">Conecte o Google Search Console</p>
-              <p className="text-xs text-white/30">Visualize dados reais de performance</p>
+              <p className="text-sm text-white">
+                Conecte o Google Search Console
+              </p>
+              <p className="text-xs text-white/30">
+                Seus sites serão importados automaticamente
+              </p>
             </div>
           </div>
-          <Link href="/settings" className="btn-secondary flex items-center gap-2 text-xs">
+          <Link
+            href="/settings"
+            className="btn-secondary flex items-center gap-2 text-xs"
+          >
             <LogIn className="h-3 w-3" />
             Conectar
           </Link>
@@ -149,7 +174,7 @@ export default function DashboardPage() {
       {/* Client Cards Grid */}
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Projetos</h2>
+          <h2 className="text-sm font-semibold text-white">Seus Sites</h2>
           <Link
             href="/clients"
             className="text-xs text-brand-400 hover:text-brand-300"
@@ -161,21 +186,22 @@ export default function DashboardPage() {
         {loading ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="glass-card h-52 animate-pulse p-5"
-              />
+              <div key={i} className="glass-card h-44 animate-pulse p-5" />
             ))}
           </div>
         ) : clients.length === 0 ? (
           <div className="glass-card flex flex-col items-center justify-center p-12 text-center">
-            <Users className="mb-3 h-10 w-10 text-white/20" />
+            <Globe className="mb-3 h-10 w-10 text-white/20" />
             <p className="text-sm text-white/40">
-              Nenhum projeto cadastrado ainda
+              {session?.accessToken
+                ? "Nenhum site encontrado no Search Console"
+                : "Conecte o Google Search Console para importar seus sites"}
             </p>
-            <Link href="/clients" className="btn-primary mt-4">
-              Cadastrar primeiro projeto
-            </Link>
+            {!session?.accessToken && (
+              <Link href="/settings" className="btn-primary mt-4">
+                Conectar GSC
+              </Link>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -189,20 +215,43 @@ export default function DashboardPage() {
   );
 }
 
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="glass-card p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <Icon className="h-4 w-4 text-white/30" />
+        <span className="text-[10px] text-brand-400">{detail}</span>
+      </div>
+      <p className="text-2xl font-bold text-white">{value}</p>
+      <p className="text-xs text-white/40">{label}</p>
+    </div>
+  );
+}
+
 function ClientCard({ client }: { client: Client }) {
   const indicators = client.indicators;
 
   return (
     <Link href={`/clients/${client.id}`}>
       <div className="glass-card-hover group cursor-pointer p-5 transition-all">
-        {/* Header: Name + Status */}
+        {/* Header */}
         <div className="mb-4 flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/5">
               <Globe className="h-5 w-5 text-white/40" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-white group-hover:text-brand-400 transition-colors">
+              <h3 className="text-sm font-semibold text-white transition-colors group-hover:text-brand-400">
                 {client.name}
               </h3>
               <p className="text-xs text-white/30">{client.domain}</p>
@@ -220,18 +269,7 @@ function ClientCard({ client }: { client: Client }) {
           </span>
         </div>
 
-        {/* Score */}
-        <div className="mb-4 flex items-center justify-center">
-          {client.currentScore !== undefined ? (
-            <ScoreRing score={client.currentScore} size="sm" showLabel />
-          ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/10">
-              <span className="text-xs text-white/20">N/A</span>
-            </div>
-          )}
-        </div>
-
-        {/* Quick Indicators */}
+        {/* GSC Indicators */}
         {indicators && (
           <div className="grid grid-cols-2 gap-2">
             <IndicatorItem
@@ -245,22 +283,29 @@ function ClientCard({ client }: { client: Client }) {
               value={formatNumber(indicators.clicks || 0)}
             />
             <IndicatorItem
-              icon={Activity}
-              label="Sessões"
-              value={formatNumber(indicators.sessions || 0)}
+              icon={Percent}
+              label="CTR"
+              value={`${((indicators.ctr || 0) * 100).toFixed(1)}%`}
             />
             <IndicatorItem
-              icon={Gauge}
-              label="PageSpeed"
-              value={indicators.performanceScore?.toString() || "—"}
-              scoreColor={indicators.performanceScore}
+              icon={Hash}
+              label="Posição Média"
+              value={(indicators.position || 0).toFixed(1)}
             />
+          </div>
+        )}
+
+        {!indicators && (
+          <div className="flex h-24 items-center justify-center">
+            <p className="text-xs text-white/20">Dados não disponíveis</p>
           </div>
         )}
 
         {/* Footer */}
         <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3">
-          <span className="text-[10px] text-white/20">{client.industry}</span>
+          <span className="text-[10px] text-white/20">
+            {client.industry || "Google Search Console"}
+          </span>
           <span className="text-[10px] text-brand-400 opacity-0 transition-opacity group-hover:opacity-100">
             Ver detalhes →
           </span>
@@ -274,31 +319,18 @@ function IndicatorItem({
   icon: Icon,
   label,
   value,
-  scoreColor,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
-  scoreColor?: number;
 }) {
-  const valueColorClass =
-    scoreColor !== undefined
-      ? scoreColor >= 90
-        ? "text-seo-green"
-        : scoreColor >= 70
-          ? "text-seo-yellow"
-          : scoreColor >= 50
-            ? "text-seo-orange"
-            : "text-seo-red"
-      : "text-white";
-
   return (
     <div className="rounded-lg bg-white/[0.02] px-2.5 py-2">
       <div className="mb-1 flex items-center gap-1.5">
         <Icon className="h-3 w-3 text-white/20" />
         <span className="text-[10px] text-white/30">{label}</span>
       </div>
-      <p className={cn("text-sm font-semibold", valueColorClass)}>{value}</p>
+      <p className="text-sm font-semibold text-white">{value}</p>
     </div>
   );
 }

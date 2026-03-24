@@ -59,15 +59,15 @@ export interface Client {
   lastAnalysis?: string;
   currentScore?: number;
   notes?: string;
-  // Quick indicators for dashboard
+  gscSiteUrl?: string;
   indicators?: ClientIndicators;
 }
 
 export interface ClientIndicators {
   impressions?: number;
   clicks?: number;
-  sessions?: number;
-  performanceScore?: number;
+  ctr?: number;
+  position?: number;
 }
 
 export interface AuditReport {
