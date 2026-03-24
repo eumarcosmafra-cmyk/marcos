@@ -54,6 +54,8 @@ export interface GSCQueryPageRow {
   position: number;
 }
 
+export type PositionBand = "Top 1" | "Top 3" | "Top 10" | "Top 20" | "Top 30";
+
 export interface Opportunity {
   query: string;
   url: string;
@@ -63,4 +65,6 @@ export interface Opportunity {
   ctr: number;
   score: number;
   reason: string;
+  band: PositionBand;
+  nextMove: string;
 }
