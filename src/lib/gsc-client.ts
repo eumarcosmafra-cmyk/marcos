@@ -6,6 +6,8 @@ import type {
   GSCPageRow,
   GSCDateRow,
   GSCOverviewData,
+  GSCQueryPageRow,
+  Opportunity,
 } from "@/types/gsc";
 
 function getAuth(accessToken: string) {
@@ -161,6 +163,63 @@ export async function getSiteOverview(
     topPages,
     dailyData,
   };
+}
+
+export async function getQueryPageData(
+  accessToken: string,
+  siteUrl: string,
+  startDate: string,
+  endDate: string,
+  limit = 500
+): Promise<GSCQueryPageRow[]> {
+  const rows = await getSearchAnalytics(accessToken, siteUrl, {
+    startDate,
+    endDate,
+    dimensions: ["query", "page"],
+    rowLimit: limit,
+  });
+
+  return (rows as { keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number }[]).map((r) => ({
+    query: r.keys?.[0] || "",
+    page: r.keys?.[1] || "",
+    clicks: r.clicks || 0,
+    impressions: r.impressions || 0,
+    ctr: r.ctr || 0,
+    position: r.position || 0,
+  }));
+}
+
+export function findQuickWins(rows: GSCQueryPageRow[]): Opportunity[] {
+  return rows
+    .filter((r) => {
+      return (
+        r.impressions > 100 &&  // tem demanda (lowered for smaller sites)
+        r.position > 8 &&       // não está bem posicionado
+        r.position < 25         // ainda é recuperável
+      );
+    })
+    .map((r) => {
+      const score =
+        r.impressions *
+        (1 / r.position) *
+        (1 - r.ctr);
+
+      return {
+        query: r.query,
+        url: r.page,
+        impressions: r.impressions,
+        clicks: r.clicks,
+        position: r.position,
+        ctr: r.ctr,
+        score,
+        reason:
+          r.position <= 15
+            ? "Quase na 1ª página — empurrão rápido"
+            : "Alta impressão + posição ruim — oportunidade direta",
+      };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 15);
 }
 
 /**

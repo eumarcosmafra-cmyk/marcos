@@ -21,6 +21,7 @@ const navItems = [
   { href: "/analysis/audit", label: "Auditoria SEO", icon: Search },
   { href: "/analysis/keywords", label: "Keywords", icon: TrendingUp },
   { href: "/analysis/competitors", label: "Concorrentes", icon: Globe },
+  { href: "/opportunities", label: "Oportunidades", icon: Zap },
   { href: "/clients", label: "Clientes", icon: Users },
   { href: "/reports", label: "Relatórios", icon: FileText },
 ];
