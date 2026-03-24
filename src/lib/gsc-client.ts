@@ -8,6 +8,7 @@ import type {
   GSCOverviewData,
   GSCQueryPageRow,
   Opportunity,
+  PositionBand,
 } from "@/types/gsc";
 
 function getAuth(accessToken: string) {
@@ -221,19 +222,37 @@ export function findQuickWins(rows: GSCQueryPageRow[]): Opportunity[] {
         (1 / Math.max(r.position, 1)) *
         (1 - r.ctr);
 
+      const pos = Number(r.position.toFixed(1));
       return {
         query: r.query,
         url: r.page,
         impressions: r.impressions,
         clicks: r.clicks,
         ctr: Number((r.ctr * 100).toFixed(2)),
-        position: Number(r.position.toFixed(1)),
+        position: pos,
         score: Number(score.toFixed(2)),
         reason: `Impressões acima do corte (${impressionThreshold}) + posição entre 5 e 30 + CTR baixo`,
+        band: getBand(r.position),
+        nextMove: getNextMove(r.position),
       };
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
+}
+
+function getBand(position: number): PositionBand {
+  if (position <= 1.5) return "Top 1";
+  if (position <= 3.5) return "Top 3";
+  if (position <= 10) return "Top 10";
+  if (position <= 20) return "Top 20";
+  return "Top 30";
+}
+
+function getNextMove(position: number): string {
+  if (position <= 3.5) return "Defender posição";
+  if (position <= 10) return "Buscar Top 3";
+  if (position <= 20) return "Buscar Top 10";
+  return "Ganhar visibilidade";
 }
 
 function normalizeCtr(ctr: number): number {

@@ -87,14 +87,32 @@ export function OpportunitiesTable({
     }
   };
 
-  const getPositionBadge = (pos: number) => {
-    if (pos < 10)
-      return { bg: "bg-seo-green/10", text: "text-seo-green", label: "Quase top 10" };
-    if (pos <= 15)
-      return { bg: "bg-seo-yellow/10", text: "text-seo-yellow", label: "Quase lá" };
-    if (pos <= 20)
-      return { bg: "bg-seo-orange/10", text: "text-seo-orange", label: "2ª página" };
-    return { bg: "bg-seo-red/10", text: "text-seo-red", label: "3ª página" };
+  const getBandStyle = (band: string) => {
+    switch (band) {
+      case "Top 1":
+        return { bg: "bg-emerald-500/10", text: "text-emerald-400" };
+      case "Top 3":
+        return { bg: "bg-seo-green/10", text: "text-seo-green" };
+      case "Top 10":
+        return { bg: "bg-seo-yellow/10", text: "text-seo-yellow" };
+      case "Top 20":
+        return { bg: "bg-seo-orange/10", text: "text-seo-orange" };
+      default:
+        return { bg: "bg-seo-red/10", text: "text-seo-red" };
+    }
+  };
+
+  const getNextMoveStyle = (move: string) => {
+    switch (move) {
+      case "Defender posição":
+        return "text-emerald-400";
+      case "Buscar Top 3":
+        return "text-seo-green";
+      case "Buscar Top 10":
+        return "text-seo-yellow";
+      default:
+        return "text-seo-orange";
+    }
   };
 
   return (
@@ -185,13 +203,17 @@ export function OpportunitiesTable({
                   </th>
                 ))}
                 <th className="px-5 py-2 text-[10px] font-medium uppercase text-white/30">
-                  Status
+                  Band
+                </th>
+                <th className="px-5 py-2 text-[10px] font-medium uppercase text-white/30">
+                  Próximo Passo
                 </th>
               </tr>
             </thead>
             <tbody>
               {display.map((opp, i) => {
-                const badge = getPositionBadge(opp.position);
+                const bandStyle = getBandStyle(opp.band);
+                const moveStyle = getNextMoveStyle(opp.nextMove);
                 return (
                   <tr
                     key={i}
@@ -241,11 +263,21 @@ export function OpportunitiesTable({
                       <span
                         className={cn(
                           "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                          badge.bg,
-                          badge.text
+                          bandStyle.bg,
+                          bandStyle.text
                         )}
                       >
-                        {badge.label}
+                        {opp.band}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={cn(
+                          "text-[10px] font-medium",
+                          moveStyle
+                        )}
+                      >
+                        {opp.nextMove}
                       </span>
                     </td>
                   </tr>
