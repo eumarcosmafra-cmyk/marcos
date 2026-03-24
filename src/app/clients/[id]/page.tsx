@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
   Globe,
@@ -19,13 +20,20 @@ import {
 } from "lucide-react";
 import { ScoreRing } from "@/components/ui/score-ring";
 import { LoadingSpinner } from "@/components/ui/loading";
+import { GSCOverviewCard } from "@/components/gsc/gsc-overview-card";
+import { TopQueriesTable } from "@/components/gsc/top-queries-table";
+import { TopPagesTable } from "@/components/gsc/top-pages-table";
 import { cn, formatDate, formatNumber, getScoreColor, getScoreLabel } from "@/lib/utils";
 import type { Client } from "@/types/seo";
+import type { GSCSite } from "@/types/gsc";
 
 export default function ClientDetailPage() {
   const params = useParams();
+  const { data: session } = useSession();
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
+  const [gscSiteUrl, setGscSiteUrl] = useState<string>("");
+  const [gscTab, setGscTab] = useState<"queries" | "pages">("queries");
 
   useEffect(() => {
     fetch("/api/clients")
@@ -37,6 +45,25 @@ export default function ClientDetailPage() {
       })
       .catch(() => setLoading(false));
   }, [params.id]);
+
+  // Auto-match client domain to GSC site
+  useEffect(() => {
+    if (!session?.accessToken || !client?.domain) return;
+
+    fetch("/api/gsc/sites")
+      .then((r) => r.json())
+      .then((json) => {
+        if (!json.sites) return;
+        const domain = client.domain.replace(/^(https?:\/\/)?(www\.)?/, "").replace(/\/$/, "");
+        const match = (json.sites as GSCSite[]).find(
+          (s) =>
+            s.siteUrl === `sc-domain:${domain}` ||
+            s.siteUrl.includes(domain)
+        );
+        if (match) setGscSiteUrl(match.siteUrl);
+      })
+      .catch(() => {});
+  }, [session?.accessToken, client?.domain]);
 
   if (loading) {
     return (
@@ -170,6 +197,55 @@ export default function ClientDetailPage() {
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Google Search Console Data */}
+      {session?.accessToken && gscSiteUrl && (
+        <>
+          <GSCOverviewCard siteUrl={gscSiteUrl} compact />
+
+          {/* Tabs: Queries / Pages */}
+          <div>
+            <div className="mb-3 flex gap-2">
+              <button
+                onClick={() => setGscTab("queries")}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  gscTab === "queries"
+                    ? "bg-brand-600/20 text-brand-400"
+                    : "text-white/30 hover:text-white/50"
+                )}
+              >
+                Top Queries
+              </button>
+              <button
+                onClick={() => setGscTab("pages")}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  gscTab === "pages"
+                    ? "bg-brand-600/20 text-brand-400"
+                    : "text-white/30 hover:text-white/50"
+                )}
+              >
+                Top Páginas
+              </button>
+            </div>
+            {gscTab === "queries" ? (
+              <TopQueriesTable siteUrl={gscSiteUrl} />
+            ) : (
+              <TopPagesTable siteUrl={gscSiteUrl} />
+            )}
+          </div>
+        </>
+      )}
+
+      {session?.accessToken && !gscSiteUrl && client?.domain && (
+        <div className="glass-card border-seo-yellow/10 p-4">
+          <p className="text-xs text-seo-yellow">
+            O domínio <strong>{client.domain}</strong> não foi encontrado no Google Search Console conectado.
+            Verifique se o domínio está verificado na sua conta.
+          </p>
         </div>
       )}
 
