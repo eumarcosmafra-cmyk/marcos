@@ -13,17 +13,16 @@ import {
   MessageSquare,
   Eye,
   MousePointerClick,
-  Activity,
-  Gauge,
+  Percent,
+  Hash,
   Calendar,
   Tag,
 } from "lucide-react";
-import { ScoreRing } from "@/components/ui/score-ring";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { GSCOverviewCard } from "@/components/gsc/gsc-overview-card";
 import { TopQueriesTable } from "@/components/gsc/top-queries-table";
 import { TopPagesTable } from "@/components/gsc/top-pages-table";
-import { cn, formatDate, formatNumber, getScoreColor, getScoreLabel } from "@/lib/utils";
+import { cn, formatDate, formatNumber } from "@/lib/utils";
 import type { Client } from "@/types/seo";
 import type { GSCSite } from "@/types/gsc";
 
@@ -46,9 +45,17 @@ export default function ClientDetailPage() {
       .catch(() => setLoading(false));
   }, [params.id]);
 
-  // Auto-match client domain to GSC site
+  // Use stored gscSiteUrl or auto-match client domain to GSC site
   useEffect(() => {
-    if (!session?.accessToken || !client?.domain) return;
+    if (!session?.accessToken || !client) return;
+
+    // Use stored GSC URL if available
+    if (client.gscSiteUrl) {
+      setGscSiteUrl(client.gscSiteUrl);
+      return;
+    }
+
+    if (!client.domain) return;
 
     fetch("/api/gsc/sites")
       .then((r) => r.json())
@@ -63,7 +70,7 @@ export default function ClientDetailPage() {
         if (match) setGscSiteUrl(match.siteUrl);
       })
       .catch(() => {});
-  }, [session?.accessToken, client?.domain]);
+  }, [session?.accessToken, client]);
 
   if (loading) {
     return (
@@ -138,9 +145,6 @@ export default function ClientDetailPage() {
             <p className="mt-2 text-xs text-white/40">{client.notes}</p>
           )}
         </div>
-        {client.currentScore !== undefined && (
-          <ScoreRing score={client.currentScore} size="md" showLabel />
-        )}
       </div>
 
       {/* Indicators */}
@@ -148,55 +152,24 @@ export default function ClientDetailPage() {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard
             icon={Eye}
-            label="Impressões"
+            label="Impressões (28d)"
             value={formatNumber(indicators.impressions || 0)}
           />
           <StatCard
             icon={MousePointerClick}
-            label="Cliques"
+            label="Cliques (28d)"
             value={formatNumber(indicators.clicks || 0)}
           />
           <StatCard
-            icon={Activity}
-            label="Sessões"
-            value={formatNumber(indicators.sessions || 0)}
+            icon={Percent}
+            label="CTR Médio"
+            value={`${((indicators.ctr || 0) * 100).toFixed(1)}%`}
           />
           <StatCard
-            icon={Gauge}
-            label="PageSpeed"
-            value={indicators.performanceScore?.toString() || "—"}
-            scoreColor={indicators.performanceScore}
+            icon={Hash}
+            label="Posição Média"
+            value={(indicators.position || 0).toFixed(1)}
           />
-        </div>
-      )}
-
-      {/* Score Details */}
-      {client.currentScore !== undefined && (
-        <div className="glass-card p-5">
-          <h3 className="mb-3 text-sm font-semibold text-white">Score SEO</h3>
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs text-white/40">Pontuação Geral</span>
-                <span className={cn("text-sm font-bold", getScoreColor(client.currentScore))}>
-                  {client.currentScore}/100
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-white/5">
-                <div
-                  className={cn("h-full rounded-full transition-all",
-                    client.currentScore >= 90 ? "bg-seo-green" :
-                    client.currentScore >= 70 ? "bg-seo-yellow" :
-                    client.currentScore >= 50 ? "bg-seo-orange" : "bg-seo-red"
-                  )}
-                  style={{ width: `${client.currentScore}%` }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-white/30">
-                {getScoreLabel(client.currentScore)}
-              </p>
-            </div>
-          </div>
         </div>
       )}
 
@@ -287,23 +260,18 @@ function StatCard({
   icon: Icon,
   label,
   value,
-  scoreColor,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
-  scoreColor?: number;
 }) {
-  const valueClass =
-    scoreColor !== undefined ? getScoreColor(scoreColor) : "text-white";
-
   return (
     <div className="glass-card p-4">
       <div className="mb-2 flex items-center gap-2">
         <Icon className="h-4 w-4 text-white/30" />
         <span className="text-xs text-white/40">{label}</span>
       </div>
-      <p className={cn("text-xl font-bold", valueClass)}>{value}</p>
+      <p className="text-xl font-bold text-white">{value}</p>
     </div>
   );
 }
