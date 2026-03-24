@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeWithAI } from "@/lib/ai-client";
 import { ANALYSIS_PROMPTS } from "@/lib/seo-prompts";
+import { isDemoMode, MOCK_COMPETITORS } from "@/lib/mock-data";
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +12,15 @@ export async function POST(request: NextRequest) {
         { error: "Domain and competitors are required" },
         { status: 400 }
       );
+    }
+
+    if (isDemoMode()) {
+      const mockComps = MOCK_COMPETITORS.competitors.map((c, i) => ({
+        ...c,
+        domain: competitors[i] || `concorrente${i + 1}.com.br`,
+      }));
+      const analysis = { ...MOCK_COMPETITORS, domain, competitors: mockComps };
+      return NextResponse.json({ analysis });
     }
 
     const prompt = ANALYSIS_PROMPTS.competitorAnalysis(domain, competitors);

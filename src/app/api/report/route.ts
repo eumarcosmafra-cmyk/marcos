@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeWithAI } from "@/lib/ai-client";
+import { isDemoMode, MOCK_REPORT } from "@/lib/mock-data";
 
 export async function POST(request: NextRequest) {
   try {
     const { clientName, domain, score, type } = await request.json();
+
+    if (isDemoMode()) {
+      const report = MOCK_REPORT(clientName || "Cliente Demo", domain || "exemplo.com.br", score || 65, type || "completa");
+      return NextResponse.json({ report });
+    }
 
     const prompt = `Gere um relatório profissional de SEO para apresentar ao cliente com os seguintes dados:
 
