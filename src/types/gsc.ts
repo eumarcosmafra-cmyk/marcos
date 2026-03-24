@@ -44,3 +44,23 @@ export interface GSCOverviewData {
   topPages: GSCPageRow[];
   dailyData: GSCDateRow[];
 }
+
+export interface GSCQueryPageRow {
+  query: string;
+  page: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export interface Opportunity {
+  query: string;
+  url: string;
+  impressions: number;
+  clicks: number;
+  position: number;
+  ctr: number;
+  score: number;
+  reason: string;
+}
