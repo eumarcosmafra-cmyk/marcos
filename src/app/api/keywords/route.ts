@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeWithAI } from "@/lib/ai-client";
 import { ANALYSIS_PROMPTS } from "@/lib/seo-prompts";
+import { isDemoMode, MOCK_KEYWORDS } from "@/lib/mock-data";
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +12,11 @@ export async function POST(request: NextRequest) {
         { error: "Keyword and niche are required" },
         { status: 400 }
       );
+    }
+
+    if (isDemoMode()) {
+      const analysis = { ...MOCK_KEYWORDS, keyword };
+      return NextResponse.json({ analysis });
     }
 
     const prompt = ANALYSIS_PROMPTS.keywordResearch(keyword, niche);

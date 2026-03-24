@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chatWithAnalyst } from "@/lib/ai-client";
+import { isDemoMode, getMockChatResponse } from "@/lib/mock-data";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,6 +11,12 @@ export async function POST(request: NextRequest) {
         { error: "Messages are required" },
         { status: 400 }
       );
+    }
+
+    if (isDemoMode()) {
+      const lastMessage = messages[messages.length - 1]?.content || "";
+      const response = getMockChatResponse(lastMessage);
+      return NextResponse.json({ response });
     }
 
     const response = await chatWithAnalyst(messages);

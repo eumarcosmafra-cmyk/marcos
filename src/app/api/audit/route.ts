@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeWithAI } from "@/lib/ai-client";
 import { ANALYSIS_PROMPTS } from "@/lib/seo-prompts";
+import { isDemoMode, MOCK_AUDIT } from "@/lib/mock-data";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,10 +11,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "URL is required" }, { status: 400 });
     }
 
+    if (isDemoMode()) {
+      const analysis = { ...MOCK_AUDIT, url, timestamp: new Date().toISOString() };
+      return NextResponse.json({ analysis });
+    }
+
     const prompt = ANALYSIS_PROMPTS.fullAudit(url);
     const response = await analyzeWithAI(prompt);
 
-    // Try to parse JSON from the response
     let analysis;
     try {
       const jsonMatch = response.match(/\{[\s\S]*\}/);
