@@ -24,6 +24,14 @@
     {
       "path": "/api/cron/generate-action-queue",
       "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/poll-firehose",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/firehose/sync-rules",
+      "schedule": "0 6 * * *"
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { serpRepository } from "@/repositories/serp-repository";
 import { competitorRepository } from "@/repositories/competitor-repository";
 import { fetchSerpTop10 } from "./fetch-serp-top10";
+import { triggerFirehoseRuleSync } from "@/services/firehose/auto-sync";
 
 export async function mapSerpResults(trackedQueryId: string, query: string) {
   const serp = await fetchSerpTop10(query);
@@ -26,6 +27,9 @@ export async function mapSerpResults(trackedQueryId: string, query: string) {
       position: r.position,
     }))
   );
+
+  // Auto-sync Firehose rules when new competitors are mapped
+  await triggerFirehoseRuleSync();
 
   return snapshot;
 }
