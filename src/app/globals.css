@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  :root,
+  [data-theme="dark"] {
     --background: #0a0a0f;
     --foreground: #f0f0f5;
     --card: #12121a;
@@ -11,34 +12,81 @@
     --border: #2a2a3a;
     --muted: #6b7280;
     --accent: #0c93e9;
+    --sidebar-bg: #0d0d14;
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.6);
+    --text-tertiary: rgba(255, 255, 255, 0.4);
+    --text-muted: rgba(255, 255, 255, 0.3);
+    --text-faint: rgba(255, 255, 255, 0.2);
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-border: rgba(255, 255, 255, 0.05);
+    --glass-hover: rgba(255, 255, 255, 0.06);
+    --glass-border-hover: rgba(255, 255, 255, 0.1);
+    --input-bg: rgba(255, 255, 255, 0.05);
+    --input-border: rgba(255, 255, 255, 0.1);
+    --scrollbar-thumb: #2a2a3a;
+    --scrollbar-hover: #3a3a4a;
+  }
+
+  [data-theme="light"] {
+    --background: #f5f7fa;
+    --foreground: #1a1a2e;
+    --card: #ffffff;
+    --card-hover: #f0f2f5;
+    --border: #e2e5ea;
+    --muted: #6b7280;
+    --accent: #0c93e9;
+    --sidebar-bg: #ffffff;
+    --text-primary: #1a1a2e;
+    --text-secondary: rgba(26, 26, 46, 0.7);
+    --text-tertiary: rgba(26, 26, 46, 0.5);
+    --text-muted: rgba(26, 26, 46, 0.4);
+    --text-faint: rgba(26, 26, 46, 0.15);
+    --glass-bg: rgba(0, 0, 0, 0.02);
+    --glass-border: rgba(0, 0, 0, 0.08);
+    --glass-hover: rgba(0, 0, 0, 0.04);
+    --glass-border-hover: rgba(0, 0, 0, 0.12);
+    --input-bg: rgba(0, 0, 0, 0.03);
+    --input-border: rgba(0, 0, 0, 0.1);
+    --scrollbar-thumb: #d1d5db;
+    --scrollbar-hover: #b0b5bd;
   }
 
   body {
     background: var(--background);
     color: var(--foreground);
     font-family: system-ui, -apple-system, sans-serif;
+    transition: background 0.3s ease, color 0.3s ease;
   }
 }
 
 @layer components {
   .glass-card {
-    @apply rounded-xl border border-white/5 bg-white/[0.03] backdrop-blur-sm;
+    @apply rounded-xl backdrop-blur-sm;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
   }
 
   .glass-card-hover {
-    @apply glass-card transition-all duration-300 hover:border-white/10 hover:bg-white/[0.06];
+    @apply glass-card transition-all duration-300;
+  }
+
+  .glass-card-hover:hover {
+    background: var(--glass-hover);
+    border-color: var(--glass-border-hover);
   }
 
   .score-ring {
     @apply relative flex h-24 w-24 items-center justify-center rounded-full;
     background: conic-gradient(
       var(--score-color, #0c93e9) calc(var(--score, 0) * 3.6deg),
-      #2a2a3a calc(var(--score, 0) * 3.6deg)
+      var(--border) calc(var(--score, 0) * 3.6deg)
     );
   }
 
   .score-ring-inner {
-    @apply flex h-20 w-20 items-center justify-center rounded-full bg-[var(--background)] text-2xl font-bold;
+    @apply flex h-20 w-20 items-center justify-center rounded-full text-2xl font-bold;
+    background: var(--background);
   }
 
   .gradient-text {
@@ -50,15 +98,36 @@
   }
 
   .btn-secondary {
-    @apply rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition-all hover:bg-white/10 hover:text-white;
+    @apply rounded-lg px-4 py-2 text-sm font-medium transition-all;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--text-secondary);
+  }
+
+  .btn-secondary:hover {
+    background: var(--glass-hover);
+    color: var(--text-primary);
   }
 
   .input-field {
-    @apply w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none transition-all focus:border-brand-500 focus:ring-1 focus:ring-brand-500/50;
+    @apply w-full rounded-lg px-4 py-2.5 text-sm outline-none transition-all focus:border-brand-500 focus:ring-1 focus:ring-brand-500/50;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--text-primary);
+  }
+
+  .input-field::placeholder {
+    color: var(--text-muted);
   }
 
   .sidebar-link {
-    @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/60 transition-all hover:bg-white/5 hover:text-white;
+    @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all;
+    color: var(--text-secondary);
+  }
+
+  .sidebar-link:hover {
+    background: var(--glass-hover);
+    color: var(--text-primary);
   }
 
   .sidebar-link-active {
@@ -116,10 +185,10 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2a2a3a;
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a4a;
+  background: var(--scrollbar-hover);
 }
