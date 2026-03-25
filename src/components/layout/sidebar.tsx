@@ -12,8 +12,11 @@ import {
   TrendingUp,
   Globe,
   Zap,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/components/providers/theme-provider";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -28,17 +31,37 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { theme, toggleTheme } = useTheme();
 
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-white/5 bg-[#0d0d14]">
+    <aside
+      className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col transition-colors duration-300"
+      style={{
+        background: "var(--sidebar-bg)",
+        borderRight: "1px solid var(--glass-border)",
+      }}
+    >
       {/* Logo */}
-      <div className="flex items-center gap-3 border-b border-white/5 px-6 py-5">
+      <div
+        className="flex items-center gap-3 px-6 py-5"
+        style={{ borderBottom: "1px solid var(--glass-border)" }}
+      >
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600">
           <Zap className="h-5 w-5 text-white" />
         </div>
         <div>
-          <h1 className="text-sm font-bold text-white">SEO Analyst</h1>
-          <p className="text-[10px] text-white/40">AI-Powered Senior SEO</p>
+          <h1
+            className="text-sm font-bold"
+            style={{ color: "var(--text-primary)" }}
+          >
+            SEO Analyst
+          </h1>
+          <p
+            className="text-[10px]"
+            style={{ color: "var(--text-tertiary)" }}
+          >
+            AI-Powered Senior SEO
+          </p>
         </div>
       </div>
 
@@ -64,7 +87,23 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-white/5 px-3 py-4">
+      <div
+        className="px-3 py-4"
+        style={{ borderTop: "1px solid var(--glass-border)" }}
+      >
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          className="sidebar-link mb-1 w-full"
+        >
+          {theme === "dark" ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )}
+          {theme === "dark" ? "Tema Claro" : "Tema Escuro"}
+        </button>
+
         <Link href="/settings" className="sidebar-link">
           <Settings className="h-4 w-4" />
           Configurações
@@ -73,7 +112,12 @@ export function Sidebar() {
           <p className="text-[10px] font-medium text-brand-400">
             Powered by Claude AI
           </p>
-          <p className="text-[10px] text-white/30">Analista SEO Sênior</p>
+          <p
+            className="text-[10px]"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Analista SEO Sênior
+          </p>
         </div>
       </div>
     </aside>
