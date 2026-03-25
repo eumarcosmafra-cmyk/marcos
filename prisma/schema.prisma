@@ -1,0 +1,215 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  domain    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  categoryWatches CategoryWatch[]
+  alerts          Alert[]
+  actionQueue     ActionQueue[]
+}
+
+model CategoryWatch {
+  id        String   @id @default(cuid())
+  clientId  String
+  name      String
+  targetUrl String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client         Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  trackedQueries TrackedQuery[]
+  alerts         Alert[]
+  actionQueue    ActionQueue[]
+
+  @@index([clientId])
+}
+
+model TrackedQuery {
+  id              String   @id @default(cuid())
+  categoryWatchId String
+  query           String
+  isPrimary       Boolean  @default(false)
+  source          String   @default("GSC")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  categoryWatch      CategoryWatch       @relation(fields: [categoryWatchId], references: [id], onDelete: Cascade)
+  serpSnapshots       SerpSnapshot[]
+  rankingHistory     RankingHistory[]
+  competitorPages    CompetitorPage[]
+  alerts             Alert[]
+  actionQueue        ActionQueue[]
+
+  @@unique([categoryWatchId, query])
+  @@index([categoryWatchId])
+}
+
+model SerpSnapshot {
+  id             String   @id @default(cuid())
+  trackedQueryId String
+  checkedAt      DateTime @default(now())
+  locationCode   String   @default("BR")
+  languageCode   String   @default("pt-BR")
+  rawJson        Json?
+  createdAt      DateTime @default(now())
+
+  trackedQuery TrackedQuery @relation(fields: [trackedQueryId], references: [id], onDelete: Cascade)
+  results      SerpResult[]
+
+  @@index([trackedQueryId, checkedAt])
+}
+
+model SerpResult {
+  id             String   @id @default(cuid())
+  serpSnapshotId String
+  position       Int
+  domain         String
+  url            String
+  title          String
+  isMonitored    Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  serpSnapshot SerpSnapshot @relation(fields: [serpSnapshotId], references: [id], onDelete: Cascade)
+
+  @@index([serpSnapshotId])
+}
+
+model RankingHistory {
+  id                  String   @id @default(cuid())
+  trackedQueryId      String
+  checkedAt           DateTime @default(now())
+  yourPosition        Int?
+  yourUrl             String?
+  topCompetitorDomain String?
+  createdAt           DateTime @default(now())
+
+  trackedQuery TrackedQuery @relation(fields: [trackedQueryId], references: [id], onDelete: Cascade)
+
+  @@index([trackedQueryId, checkedAt])
+}
+
+model CompetitorPage {
+  id              String   @id @default(cuid())
+  trackedQueryId  String
+  domain          String
+  url             String
+  firstSeenAt     DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
+  isActive        Boolean  @default(true)
+  isMonitored     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  trackedQuery TrackedQuery       @relation(fields: [trackedQueryId], references: [id], onDelete: Cascade)
+  snapshots    CompetitorSnapshot[]
+
+  @@unique([trackedQueryId, domain, url])
+  @@index([trackedQueryId])
+}
+
+model CompetitorSnapshot {
+  id               String   @id @default(cuid())
+  competitorPageId String
+  capturedAt       DateTime @default(now())
+  title            String?
+  h1               String?
+  metaDescription  String?
+  contentLength    Int?
+  faqCount         Int?
+  rawHtmlHash      String?
+  createdAt        DateTime @default(now())
+
+  competitorPage CompetitorPage @relation(fields: [competitorPageId], references: [id], onDelete: Cascade)
+
+  @@index([competitorPageId, capturedAt])
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertType {
+  SERP_MOVEMENT
+  RANKING_DROP
+  COMPETITOR_UPDATE
+  NEW_TOP5_COMPETITOR
+}
+
+enum AlertStatus {
+  OPEN
+  DISMISSED
+  DONE
+}
+
+model Alert {
+  id                String        @id @default(cuid())
+  clientId          String
+  categoryWatchId   String?
+  trackedQueryId    String?
+  severity          AlertSeverity
+  type              AlertType
+  title             String
+  message           String
+  recommendedAction String?
+  status            AlertStatus   @default(OPEN)
+  metadataJson      Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  client        Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  categoryWatch CategoryWatch? @relation(fields: [categoryWatchId], references: [id], onDelete: SetNull)
+  trackedQuery  TrackedQuery?  @relation(fields: [trackedQueryId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, status])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+enum PriorityLabel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ActionStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+model ActionQueue {
+  id                String        @id @default(cuid())
+  clientId          String
+  categoryWatchId   String?
+  trackedQueryId    String?
+  priorityScore     Float
+  priorityLabel     PriorityLabel
+  actionType        String
+  actionTitle       String
+  actionDescription String
+  source            String
+  status            ActionStatus  @default(OPEN)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  client        Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  categoryWatch CategoryWatch? @relation(fields: [categoryWatchId], references: [id], onDelete: SetNull)
+  trackedQuery  TrackedQuery?  @relation(fields: [trackedQueryId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, status])
+  @@index([priorityScore])
+}

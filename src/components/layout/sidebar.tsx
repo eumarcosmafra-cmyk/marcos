@@ -14,6 +14,7 @@ import {
   Zap,
   Sun,
   Moon,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/providers/theme-provider";
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/analysis/keywords", label: "Keywords", icon: TrendingUp },
   { href: "/analysis/competitors", label: "Concorrentes", icon: Globe },
   { href: "/opportunities", label: "Oportunidades", icon: Zap },
+  { href: "/monitor", label: "Monitor", icon: Shield },
   { href: "/clients", label: "Clientes", icon: Users },
   { href: "/reports", label: "Relatórios", icon: FileText },
 ];
