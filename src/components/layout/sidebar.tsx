@@ -4,31 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  Search,
   Users,
-  FileText,
-  MessageSquare,
-  Settings,
-  TrendingUp,
-  Globe,
   Zap,
   Sun,
   Moon,
-  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/providers/theme-provider";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/analysis", label: "Analista IA", icon: MessageSquare },
-  { href: "/analysis/audit", label: "Auditoria SEO", icon: Search },
-  { href: "/analysis/keywords", label: "Keywords", icon: TrendingUp },
-  { href: "/analysis/competitors", label: "Concorrentes", icon: Globe },
-  { href: "/opportunities", label: "Oportunidades", icon: Zap },
-  { href: "/monitor", label: "Monitor", icon: Shield },
   { href: "/clients", label: "Clientes", icon: Users },
-  { href: "/reports", label: "Relatórios", icon: FileText },
+  { href: "/opportunities", label: "Oportunidades", icon: Zap },
 ];
 
 export function Sidebar() {
@@ -106,10 +93,6 @@ export function Sidebar() {
           {theme === "dark" ? "Tema Claro" : "Tema Escuro"}
         </button>
 
-        <Link href="/settings" className="sidebar-link">
-          <Settings className="h-4 w-4" />
-          Configurações
-        </Link>
         <div className="mt-3 rounded-lg bg-brand-600/10 px-3 py-2">
           <p className="text-[10px] font-medium text-brand-400">
             Powered by Claude AI
