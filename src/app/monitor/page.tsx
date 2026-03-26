@@ -85,6 +85,11 @@ export default function MonitorPage() {
     { found: boolean; position: number | null; match: string | null } | null
   >(null);
   const [gscPosition, setGscPosition] = useState<number | null>(null);
+  const [gscData, setGscData] = useState<{
+    currentMonth: { position: number | null; clicks: number; impressions: number; ctr: number; period: string };
+    previousMonth: { position: number | null; clicks: number; impressions: number; ctr: number; period: string };
+    trend: "up" | "down" | "stable" | "new";
+  } | null>(null);
 
   // Fetch clients — auto-sync from GSC if DB is empty
   useEffect(() => {
@@ -159,6 +164,7 @@ export default function MonitorPage() {
       setSerpResults(data.serpResults || []);
       setClientInSerp(data.clientInSerp || null);
       setGscPosition(data.gscPosition || null);
+      setGscData(data.gscData || null);
       if (data.suggestedQueries?.length > 0) {
         setSelectedPrimary(data.suggestedQueries[0].query);
       }
@@ -599,7 +605,40 @@ export default function MonitorPage() {
                     </div>
                   )}
 
-                  {/* Client position summary */}
+                  {/* 6th line: GSC Position (query + URL exact match) */}
+                  {gscData && (
+                    <div className="flex items-center gap-3 rounded-lg bg-blue-600/10 p-2 ring-1 ring-blue-500/20">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-[10px] font-bold text-blue-400">
+                        G
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+                          Google Search Console — posição média (query + URL exata)
+                        </p>
+                        <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                          {gscData.currentMonth.position
+                            ? `Posição ${gscData.currentMonth.position} · ${gscData.currentMonth.clicks} cliques · ${gscData.currentMonth.impressions} impressões`
+                            : "Sem dados para esta query + URL no período atual"}
+                        </p>
+                      </div>
+                      {gscData.currentMonth.position && (
+                        <span className={cn(
+                          "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                          gscData.trend === "up" && "bg-emerald-600/20 text-emerald-400",
+                          gscData.trend === "down" && "bg-red-600/20 text-red-400",
+                          gscData.trend === "stable" && "bg-gray-600/20 text-gray-400",
+                          gscData.trend === "new" && "bg-blue-600/20 text-blue-400"
+                        )}>
+                          {gscData.trend === "up" && "↑ Subiu"}
+                          {gscData.trend === "down" && "↓ Caiu"}
+                          {gscData.trend === "stable" && "→ Estável"}
+                          {gscData.trend === "new" && "Novo"}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* SERP vs GSC summary */}
                   <div className={cn(
                     "rounded-lg p-3",
                     clientInSerp?.found ? "bg-emerald-600/10" : "bg-yellow-600/10"
@@ -612,13 +651,83 @@ export default function MonitorPage() {
                       <p className="text-xs text-yellow-400">
                         ✗ Seu site não aparece no Top 5 da SERP
                         {gscPosition ? (
-                          <span> — Posição no GSC: <strong>{gscPosition}</strong></span>
+                          <span> — Posição GSC: <strong>{gscPosition}</strong></span>
                         ) : (
                           <span> — Sem dados no Google Search Console</span>
                         )}
                       </p>
                     )}
                   </div>
+
+                  {/* Monthly comparison table */}
+                  {gscData && (gscData.currentMonth.position || gscData.previousMonth.position) && (
+                    <div className="rounded-lg p-3" style={{ background: "var(--glass-bg)", border: "1px solid var(--glass-border)" }}>
+                      <h5 className="mb-2 text-[10px] font-semibold uppercase" style={{ color: "var(--text-muted)" }}>
+                        Comparativo GSC — Query + URL exata
+                      </h5>
+                      <table className="w-full">
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid var(--glass-border)" }}>
+                            <th className="pb-1.5 text-left text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Período</th>
+                            <th className="pb-1.5 text-right text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Posição</th>
+                            <th className="pb-1.5 text-right text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Cliques</th>
+                            <th className="pb-1.5 text-right text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Impressões</th>
+                            <th className="pb-1.5 text-right text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>CTR</th>
+                            <th className="pb-1.5 text-right text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Tendência</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr style={{ borderBottom: "1px solid var(--glass-border)" }}>
+                            <td className="py-1.5 text-xs" style={{ color: "var(--text-secondary)" }}>Mês atual</td>
+                            <td className="py-1.5 text-right text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                              {gscData.currentMonth.position ?? "—"}
+                            </td>
+                            <td className="py-1.5 text-right text-xs" style={{ color: "var(--text-secondary)" }}>
+                              {gscData.currentMonth.clicks}
+                            </td>
+                            <td className="py-1.5 text-right text-xs" style={{ color: "var(--text-secondary)" }}>
+                              {gscData.currentMonth.impressions}
+                            </td>
+                            <td className="py-1.5 text-right text-xs" style={{ color: "var(--text-secondary)" }}>
+                              {(gscData.currentMonth.ctr * 100).toFixed(1)}%
+                            </td>
+                            <td className="py-1.5 text-right">
+                              <span className={cn(
+                                "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                                gscData.trend === "up" && "bg-emerald-600/20 text-emerald-400",
+                                gscData.trend === "down" && "bg-red-600/20 text-red-400",
+                                gscData.trend === "stable" && "bg-gray-600/20 text-gray-400",
+                                gscData.trend === "new" && "bg-blue-600/20 text-blue-400"
+                              )}>
+                                {gscData.trend === "up" && "↑ Avançou"}
+                                {gscData.trend === "down" && "↓ Regrediu"}
+                                {gscData.trend === "stable" && "→ Estável"}
+                                {gscData.trend === "new" && "Novo"}
+                              </span>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="py-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>Mês anterior</td>
+                            <td className="py-1.5 text-right text-xs" style={{ color: "var(--text-tertiary)" }}>
+                              {gscData.previousMonth.position ?? "—"}
+                            </td>
+                            <td className="py-1.5 text-right text-xs" style={{ color: "var(--text-tertiary)" }}>
+                              {gscData.previousMonth.clicks}
+                            </td>
+                            <td className="py-1.5 text-right text-xs" style={{ color: "var(--text-tertiary)" }}>
+                              {gscData.previousMonth.impressions}
+                            </td>
+                            <td className="py-1.5 text-right text-xs" style={{ color: "var(--text-tertiary)" }}>
+                              {(gscData.previousMonth.ctr * 100).toFixed(1)}%
+                            </td>
+                            <td className="py-1.5 text-right text-[10px]" style={{ color: "var(--text-muted)" }}>
+                              base
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
 
                   {/* Query selection */}
                   <div>

@@ -96,37 +96,110 @@ function findClientInSerp(
 }
 
 /**
- * STEP 3: If not in SERP, get position from GSC for query + URL
+ * STEP 3: Get GSC position for exact query + exact URL (current and previous month)
  */
-async function getGSCPosition(
-  accessToken: string,
-  gscSiteUrl: string,
-  query: string,
-  targetUrl: string
-): Promise<number | null> {
-  const { startDate, endDate } = getDateRange("28d");
+interface GSCPositionData {
+  currentMonth: { position: number | null; clicks: number; impressions: number; ctr: number; period: string };
+  previousMonth: { position: number | null; clicks: number; impressions: number; ctr: number; period: string };
+  trend: "up" | "down" | "stable" | "new";
+}
 
-  const rows = await getSearchAnalytics(accessToken, gscSiteUrl, {
-    startDate,
-    endDate,
-    dimensions: ["query", "page"],
-    rowLimit: 500,
-  });
+function getMonthRange(monthsAgo: number): { startDate: string; endDate: string } {
+  const now = new Date();
+  const end = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 0); // last day of target month
+  const start = new Date(end.getFullYear(), end.getMonth(), 1); // first day of target month
 
+  // If current month, end = yesterday (GSC delay)
+  if (monthsAgo === 0) {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return {
+      startDate: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0],
+      endDate: yesterday.toISOString().split("T")[0],
+    };
+  }
+
+  return {
+    startDate: start.toISOString().split("T")[0],
+    endDate: end.toISOString().split("T")[0],
+  };
+}
+
+type RawRow = {
+  keys?: string[];
+  position?: number;
+  clicks?: number;
+  impressions?: number;
+  ctr?: number;
+};
+
+function findQueryUrlMatch(rows: RawRow[], query: string, targetUrl: string) {
   const targetNorm = targetUrl.replace(/\/$/, "").toLowerCase();
 
-  type RawRow = {
-    keys?: string[];
-    position?: number;
-  };
-
-  const match = (rows as RawRow[]).find((r) => {
+  return rows.find((r) => {
     const rowQuery = (r.keys?.[0] || "").toLowerCase();
     const rowPage = (r.keys?.[1] || "").replace(/\/$/, "").toLowerCase();
     return rowQuery === query.toLowerCase() && (rowPage === targetNorm || rowPage.startsWith(targetNorm));
   });
+}
 
-  return match?.position ? Number(match.position.toFixed(1)) : null;
+async function getGSCPositionData(
+  accessToken: string,
+  gscSiteUrl: string,
+  query: string,
+  targetUrl: string
+): Promise<GSCPositionData> {
+  const currentRange = getMonthRange(0);
+  const previousRange = getMonthRange(1);
+
+  const [currentRows, previousRows] = await Promise.all([
+    getSearchAnalytics(accessToken, gscSiteUrl, {
+      startDate: currentRange.startDate,
+      endDate: currentRange.endDate,
+      dimensions: ["query", "page"],
+      rowLimit: 500,
+    }),
+    getSearchAnalytics(accessToken, gscSiteUrl, {
+      startDate: previousRange.startDate,
+      endDate: previousRange.endDate,
+      dimensions: ["query", "page"],
+      rowLimit: 500,
+    }),
+  ]);
+
+  const currentMatch = findQueryUrlMatch(currentRows as RawRow[], query, targetUrl);
+  const previousMatch = findQueryUrlMatch(previousRows as RawRow[], query, targetUrl);
+
+  const currentPos = currentMatch?.position ? Number(currentMatch.position.toFixed(1)) : null;
+  const previousPos = previousMatch?.position ? Number(previousMatch.position.toFixed(1)) : null;
+
+  let trend: "up" | "down" | "stable" | "new" = "new";
+  if (currentPos !== null && previousPos !== null) {
+    const diff = previousPos - currentPos; // positive = improved (lower position = better)
+    if (diff > 1) trend = "up";
+    else if (diff < -1) trend = "down";
+    else trend = "stable";
+  } else if (currentPos !== null && previousPos === null) {
+    trend = "new";
+  }
+
+  return {
+    currentMonth: {
+      position: currentPos,
+      clicks: currentMatch?.clicks || 0,
+      impressions: currentMatch?.impressions || 0,
+      ctr: currentMatch?.ctr || 0,
+      period: `${currentRange.startDate} a ${currentRange.endDate}`,
+    },
+    previousMonth: {
+      position: previousPos,
+      clicks: previousMatch?.clicks || 0,
+      impressions: previousMatch?.impressions || 0,
+      ctr: previousMatch?.ctr || 0,
+      period: `${previousRange.startDate} a ${previousRange.endDate}`,
+    },
+    trend,
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -187,30 +260,30 @@ export async function POST(request: NextRequest) {
     // === STEP 2: Check if client URL is in SERP ===
     const serpCheck = findClientInSerp(serpResults, targetUrl);
 
-    // === STEP 3: If not in SERP, get position from GSC ===
-    let gscPosition: number | null = null;
-    if (!serpCheck.found) {
-      try {
-        const sites = await getGSCSites(session.accessToken);
-        const gscSite = matchDomainToGSCSite(client.domain, sites);
-        if (gscSite) {
-          gscPosition = await getGSCPosition(
-            session.accessToken,
-            gscSite,
-            categoryName,
-            targetUrl
-          );
-        }
-      } catch (e) {
-        console.warn("[setup] GSC fallback failed:", e);
+    // === STEP 3: Always get GSC position data (current + previous month) ===
+    let gscData: GSCPositionData | null = null;
+    try {
+      const sites = await getGSCSites(session.accessToken);
+      const gscSite = matchDomainToGSCSite(client.domain, sites);
+      if (gscSite) {
+        gscData = await getGSCPositionData(
+          session.accessToken,
+          gscSite,
+          categoryName,
+          targetUrl
+        );
       }
+    } catch (e) {
+      console.warn("[setup] GSC data failed:", e);
     }
+
+    const gscPosition = gscData?.currentMonth.position ?? null;
 
     // Build suggested queries: main query + related from Google
     const suggestedQueries = [
       {
         query: categoryName,
-        impressions: 0,
+        impressions: gscData?.currentMonth.impressions ?? 0,
         position: serpCheck.found
           ? serpCheck.position!
           : gscPosition ?? 0,
@@ -236,6 +309,7 @@ export async function POST(request: NextRequest) {
       serpResults,
       clientInSerp: serpCheck,
       gscPosition,
+      gscData,
     });
   } catch (error) {
     console.error("[category-watch/setup] Error:", error);
