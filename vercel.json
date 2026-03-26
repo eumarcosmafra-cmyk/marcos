@@ -27,7 +27,7 @@
     },
     {
       "path": "/api/cron/poll-firehose",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 12 * * *"
     },
     {
       "path": "/api/firehose/sync-rules",
