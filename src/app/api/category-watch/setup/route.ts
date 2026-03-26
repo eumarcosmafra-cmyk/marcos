@@ -30,14 +30,22 @@ export async function POST(request: NextRequest) {
 
     const { clientId, categoryName, targetUrl } = parsed.data;
 
-    // Validate client exists
-    const client = await clientRepository.findById(clientId);
+    // Validate client exists — try by ID first, then upsert by domain
+    let client = await clientRepository.findById(clientId);
     if (!client) {
-      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+      // clientId might be a domain from in-memory store, try to find or create
+      client = await clientRepository.findByDomain(clientId);
+      if (!client) {
+        try {
+          client = await clientRepository.upsertByDomain(clientId, clientId);
+        } catch {
+          return NextResponse.json({ error: "Client not found" }, { status: 404 });
+        }
+      }
     }
 
     // Check limit of 5 categories per client
-    const count = await categoryWatchRepository.countByClient(clientId);
+    const count = await categoryWatchRepository.countByClient(client.id);
     if (count >= 5) {
       return NextResponse.json(
         { error: "Limite de 5 categorias por cliente atingido" },
@@ -47,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     // Create category watch
     const categoryWatch = await categoryWatchRepository.create(
-      clientId,
+      client.id,
       categoryName,
       targetUrl
     );
