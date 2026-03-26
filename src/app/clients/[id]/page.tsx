@@ -33,6 +33,7 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true);
   const [gscSiteUrl, setGscSiteUrl] = useState<string>("");
   const [gscTab, setGscTab] = useState<"queries" | "pages">("queries");
+  const [mainTab, setMainTab] = useState<"overview" | "rankings">("overview");
 
   useEffect(() => {
     async function loadClient() {
@@ -185,85 +186,308 @@ export default function ClientDetailPage() {
         </div>
       )}
 
-      {/* Google Search Console Data */}
-      {session?.accessToken && gscSiteUrl && (
-        <>
-          <GSCOverviewCard siteUrl={gscSiteUrl} compact />
+      {/* Main Tabs */}
+      <div className="flex gap-1" style={{ borderBottom: "1px solid var(--glass-border)" }}>
+        <button
+          onClick={() => setMainTab("overview")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium transition-colors",
+            mainTab === "overview"
+              ? "border-b-2 border-brand-500 text-brand-400"
+              : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+          )}
+        >
+          Visão Geral
+        </button>
+        <button
+          onClick={() => setMainTab("rankings")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium transition-colors",
+            mainTab === "rankings"
+              ? "border-b-2 border-brand-500 text-brand-400"
+              : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+          )}
+        >
+          Ranking Categorias
+        </button>
+      </div>
 
-          {/* Tabs: Queries / Pages */}
-          <div>
-            <div className="mb-3 flex gap-2">
-              <button
-                onClick={() => setGscTab("queries")}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                  gscTab === "queries"
-                    ? "bg-brand-600/20 text-brand-400"
-                    : "text-white/30 hover:text-white/50"
+      {mainTab === "overview" && (
+        <>
+          {/* Google Search Console Data */}
+          {session?.accessToken && gscSiteUrl && (
+            <>
+              <GSCOverviewCard siteUrl={gscSiteUrl} compact />
+
+              {/* Tabs: Queries / Pages */}
+              <div>
+                <div className="mb-3 flex gap-2">
+                  <button
+                    onClick={() => setGscTab("queries")}
+                    className={cn(
+                      "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                      gscTab === "queries"
+                        ? "bg-brand-600/20 text-brand-400"
+                        : "text-white/30 hover:text-white/50"
+                    )}
+                  >
+                    Top Queries
+                  </button>
+                  <button
+                    onClick={() => setGscTab("pages")}
+                    className={cn(
+                      "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                      gscTab === "pages"
+                        ? "bg-brand-600/20 text-brand-400"
+                        : "text-white/30 hover:text-white/50"
+                    )}
+                  >
+                    Top Páginas
+                  </button>
+                </div>
+                {gscTab === "queries" ? (
+                  <TopQueriesTable siteUrl={gscSiteUrl} />
+                ) : (
+                  <TopPagesTable siteUrl={gscSiteUrl} />
                 )}
-              >
-                Top Queries
-              </button>
-              <button
-                onClick={() => setGscTab("pages")}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                  gscTab === "pages"
-                    ? "bg-brand-600/20 text-brand-400"
-                    : "text-white/30 hover:text-white/50"
-                )}
-              >
-                Top Páginas
-              </button>
+              </div>
+            </>
+          )}
+
+          {session?.accessToken && !gscSiteUrl && client?.domain && (
+            <div className="glass-card border-seo-yellow/10 p-4">
+              <p className="text-xs text-seo-yellow">
+                O domínio <strong>{client.domain}</strong> não foi encontrado no Google Search Console conectado.
+                Verifique se o domínio está verificado na sua conta.
+              </p>
             </div>
-            {gscTab === "queries" ? (
-              <TopQueriesTable siteUrl={gscSiteUrl} />
-            ) : (
-              <TopPagesTable siteUrl={gscSiteUrl} />
-            )}
+          )}
+
+          {/* Quick Actions */}
+          <div>
+            <h3 className="mb-3 text-sm font-semibold text-white">Ações Rápidas</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <QuickAction
+                href={`/analysis/audit`}
+                icon={Search}
+                label="Auditoria SEO"
+                desc="Análise completa"
+              />
+              <QuickAction
+                href={`/analysis/keywords`}
+                icon={TrendingUp}
+                label="Keywords"
+                desc="Pesquisa de palavras-chave"
+              />
+              <QuickAction
+                href={`/reports`}
+                icon={FileText}
+                label="Relatório"
+                desc="Gerar relatório"
+              />
+              <QuickAction
+                href={`/analysis`}
+                icon={MessageSquare}
+                label="Chat IA"
+                desc="Consultar analista"
+              />
+            </div>
           </div>
         </>
       )}
 
-      {session?.accessToken && !gscSiteUrl && client?.domain && (
-        <div className="glass-card border-seo-yellow/10 p-4">
-          <p className="text-xs text-seo-yellow">
-            O domínio <strong>{client.domain}</strong> não foi encontrado no Google Search Console conectado.
-            Verifique se o domínio está verificado na sua conta.
-          </p>
-        </div>
+      {mainTab === "rankings" && (
+        <RankingsTab clientId={client.id} />
       )}
+    </div>
+  );
+}
 
-      {/* Quick Actions */}
-      <div>
-        <h3 className="mb-3 text-sm font-semibold text-white">Ações Rápidas</h3>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <QuickAction
-            href={`/analysis/audit`}
-            icon={Search}
-            label="Auditoria SEO"
-            desc="Análise completa"
-          />
-          <QuickAction
-            href={`/analysis/keywords`}
-            icon={TrendingUp}
-            label="Keywords"
-            desc="Pesquisa de palavras-chave"
-          />
-          <QuickAction
-            href={`/reports`}
-            icon={FileText}
-            label="Relatório"
-            desc="Gerar relatório"
-          />
-          <QuickAction
-            href={`/analysis`}
-            icon={MessageSquare}
-            label="Chat IA"
-            desc="Consultar analista"
-          />
-        </div>
+function RankingsTab({ clientId }: { clientId: string }) {
+  const [rankings, setRankings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/clients/${clientId}/rankings`)
+      .then((r) => r.json())
+      .then((data) => setRankings(data.rankings || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [clientId]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <LoadingSpinner className="h-6 w-6" />
       </div>
+    );
+  }
+
+  if (rankings.length === 0) {
+    return (
+      <div className="glass-card flex flex-col items-center gap-3 p-12 text-center">
+        <TrendingUp className="h-8 w-8" style={{ color: "var(--text-faint)" }} />
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          Nenhuma categoria monitorada
+        </p>
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Vá ao Monitor para adicionar categorias
+        </p>
+        <Link href="/monitor" className="btn-primary mt-2 text-xs">
+          Ir para Monitor
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {rankings.map((r: any) => (
+        <div key={r.id} className="glass-card overflow-hidden">
+          {/* Header row */}
+          <div
+            className="flex items-center justify-between p-4"
+            style={{ borderBottom: "1px solid var(--glass-border)" }}
+          >
+            <div>
+              <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                {r.name}
+              </h3>
+              <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                {r.query ? `Query: ${r.query}` : "Sem query"} · {r.targetUrl}
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              {/* GSC Position */}
+              <div className="text-right">
+                <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                  Posição GSC
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="text-lg font-bold"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    {r.gscCurrent ?? "—"}
+                  </span>
+                  {r.trend === "up" && (
+                    <span className="text-xs text-emerald-400">↑</span>
+                  )}
+                  {r.trend === "down" && (
+                    <span className="text-xs text-red-400">↓</span>
+                  )}
+                  {r.trend === "stable" && (
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      →
+                    </span>
+                  )}
+                  {r.trend === "new" && (
+                    <span className="rounded bg-blue-600/20 px-1 text-[9px] text-blue-400">
+                      Novo
+                    </span>
+                  )}
+                </div>
+              </div>
+              {/* Month comparison */}
+              {r.gscPrevious !== null && (
+                <div className="text-right">
+                  <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    Mês anterior
+                  </p>
+                  <span className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+                    {r.gscPrevious}
+                  </span>
+                </div>
+              )}
+              {/* Clicks */}
+              <div className="text-right">
+                <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                  Cliques
+                </p>
+                <span
+                  className="text-sm font-medium"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  {r.gscClicks || 0}
+                </span>
+              </div>
+              {/* Impressions */}
+              <div className="text-right">
+                <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                  Impressões
+                </p>
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  {r.gscImpressions || 0}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* SERP Top 5 - compact */}
+          {r.serpTop5.length > 0 && (
+            <div className="px-4 py-3">
+              <p
+                className="mb-2 text-[10px] font-medium uppercase"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Top 5 Google
+              </p>
+              <div className="space-y-1">
+                {r.serpTop5.map((s: any) => {
+                  const isClient = s.domain.includes(
+                    r.targetUrl
+                      .replace(/^https?:\/\/(www\.)?/, "")
+                      .split("/")[0]
+                  );
+                  return (
+                    <div
+                      key={s.url}
+                      className={cn(
+                        "flex items-center gap-2 rounded px-2 py-1",
+                        isClient && "bg-emerald-600/10"
+                      )}
+                    >
+                      <span
+                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
+                        style={{
+                          background: "var(--glass-border)",
+                          color: "var(--text-primary)",
+                        }}
+                      >
+                        {s.position}
+                      </span>
+                      <span
+                        className="flex-1 truncate text-[10px]"
+                        style={{
+                          color: isClient
+                            ? "rgb(52 211 153)"
+                            : "var(--text-secondary)",
+                        }}
+                      >
+                        {s.domain}
+                      </span>
+                      <span
+                        className="truncate text-[10px]"
+                        style={{
+                          color: "var(--text-muted)",
+                          maxWidth: "300px",
+                        }}
+                      >
+                        {s.title}
+                      </span>
+                      {isClient && (
+                        <span className="shrink-0 text-[9px] font-medium text-emerald-400">
+                          Você
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
