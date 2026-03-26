@@ -545,7 +545,7 @@ export default function MonitorPage() {
                     disabled={setupLoading || !setupName || !setupUrl}
                     className="btn-primary"
                   >
-                    {setupLoading ? "Buscando queries do GSC..." : "Buscar Queries"}
+                    {setupLoading ? "Buscando queries no Google..." : "Buscar Queries"}
                   </button>
                 </div>
               ) : (

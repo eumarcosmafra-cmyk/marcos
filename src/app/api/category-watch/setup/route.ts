@@ -3,8 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { categoryWatchRepository } from "@/repositories/category-watch-repository";
 import { clientRepository } from "@/repositories/client-repository";
-import { getUrlTopQueries } from "@/services/gsc/get-url-top-queries";
-import { getGSCSites, matchDomainToGSCSite } from "@/lib/gsc-client";
+import { getEnv, hasSerpApi } from "@/lib/env";
 
 const setupSchema = z.object({
   clientId: z.string().optional(),
@@ -18,6 +17,71 @@ function extractDomain(url: string): string {
   } catch {
     return url;
   }
+}
+
+interface SerperRelatedSearch {
+  query: string;
+}
+
+async function fetchRelatedQueries(
+  categoryName: string,
+  apiKey: string
+): Promise<{ query: string; impressions: number; position: number; relevanceScore: number }[]> {
+  // Search for the category name to get related searches and "people also ask"
+  const res = await fetch("https://google.serper.dev/search", {
+    method: "POST",
+    headers: {
+      "X-API-KEY": apiKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      q: categoryName,
+      gl: "br",
+      hl: "pt-br",
+      location: "Brazil",
+      num: 10,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Serper API error: ${res.status}`);
+  }
+
+  const data = await res.json();
+
+  const queries: { query: string; impressions: number; position: number; relevanceScore: number }[] = [];
+
+  // Add the main query
+  queries.push({
+    query: categoryName,
+    impressions: 1000,
+    position: 1,
+    relevanceScore: 1.0,
+  });
+
+  // Add related searches from Serper
+  const relatedSearches = (data.relatedSearches || []) as SerperRelatedSearch[];
+  relatedSearches.forEach((rs: SerperRelatedSearch, i: number) => {
+    queries.push({
+      query: rs.query,
+      impressions: Math.max(100, 800 - i * 80),
+      position: i + 2,
+      relevanceScore: Math.max(0.3, 1.0 - i * 0.08),
+    });
+  });
+
+  // Add "people also ask" questions
+  const peopleAlsoAsk = (data.peopleAlsoAsk || []) as { question: string }[];
+  peopleAlsoAsk.forEach((paa: { question: string }, i: number) => {
+    queries.push({
+      query: paa.question,
+      impressions: Math.max(50, 500 - i * 60),
+      position: relatedSearches.length + i + 2,
+      relevanceScore: Math.max(0.2, 0.8 - i * 0.1),
+    });
+  });
+
+  return queries;
 }
 
 export async function POST(request: NextRequest) {
@@ -74,22 +138,30 @@ export async function POST(request: NextRequest) {
       targetUrl
     );
 
-    // Try to fetch top queries from GSC
-    let suggestedQueries: Awaited<ReturnType<typeof getUrlTopQueries>> = [];
-    try {
-      const sites = await getGSCSites(session.accessToken);
-      const gscSite = matchDomainToGSCSite(client.domain, sites);
-
-      if (gscSite) {
-        suggestedQueries = await getUrlTopQueries(
-          session.accessToken,
-          gscSite,
-          targetUrl,
-          15
-        );
+    // Fetch related queries from Google via Serper API
+    let suggestedQueries: { query: string; impressions: number; position: number; relevanceScore: number }[] = [];
+    if (hasSerpApi()) {
+      try {
+        const env = getEnv();
+        suggestedQueries = await fetchRelatedQueries(categoryName, env.SERP_API_KEY);
+      } catch (e) {
+        console.warn("[setup] Serper query failed:", e);
+        // Return at least the category name as a query
+        suggestedQueries = [{
+          query: categoryName,
+          impressions: 0,
+          position: 0,
+          relevanceScore: 1.0,
+        }];
       }
-    } catch (e) {
-      console.warn("[setup] GSC query failed:", e);
+    } else {
+      // No API key — return category name as fallback
+      suggestedQueries = [{
+        query: categoryName,
+        impressions: 0,
+        position: 0,
+        relevanceScore: 1.0,
+      }];
     }
 
     return NextResponse.json({
