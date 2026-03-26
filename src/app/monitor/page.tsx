@@ -79,18 +79,30 @@ export default function MonitorPage() {
   const [selectedPrimary, setSelectedPrimary] = useState<string>("");
   const [selectedRelated, setSelectedRelated] = useState<string[]>([]);
 
-  // Fetch clients
+  // Fetch clients — auto-sync from GSC if DB is empty
   useEffect(() => {
-    fetch("/api/clients")
-      .then((r) => r.json())
-      .then((data) => {
-        const list = data.clients || data || [];
+    async function loadClients() {
+      try {
+        const res = await fetch("/api/clients");
+        const data = await res.json();
+        let list = data.clients || data || [];
+
+        // If no clients in DB, try syncing from GSC
+        if (list.length === 0) {
+          const syncRes = await fetch("/api/gsc/sync", { method: "POST" });
+          const syncData = await syncRes.json();
+          if (syncData.clients) {
+            list = syncData.clients;
+          }
+        }
+
         setClients(list);
         if (list.length > 0 && !selectedClient) {
           setSelectedClient(list[0].id);
         }
-      })
-      .catch(() => {});
+      } catch {}
+    }
+    loadClients();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

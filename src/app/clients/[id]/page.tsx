@@ -35,14 +35,26 @@ export default function ClientDetailPage() {
   const [gscTab, setGscTab] = useState<"queries" | "pages">("queries");
 
   useEffect(() => {
-    fetch("/api/clients")
-      .then((res) => res.json())
-      .then((data: Client[]) => {
-        const found = data.find((c) => c.id === params.id);
+    async function loadClient() {
+      try {
+        let res = await fetch("/api/clients");
+        let data: Client[] = await res.json();
+        let found = data.find((c) => c.id === params.id);
+
+        // If not found, try syncing from GSC first
+        if (!found) {
+          const syncRes = await fetch("/api/gsc/sync", { method: "POST" });
+          const syncData = await syncRes.json();
+          if (syncData.clients) {
+            found = syncData.clients.find((c: Client) => c.id === params.id);
+          }
+        }
+
         setClient(found || null);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      } catch {}
+      setLoading(false);
+    }
+    loadClient();
   }, [params.id]);
 
   // Use stored gscSiteUrl or auto-match client domain to GSC site
