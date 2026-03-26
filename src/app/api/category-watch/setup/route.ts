@@ -23,7 +23,7 @@ function extractDomain(url: string): string {
 /**
  * STEP 1: Search the category name on Google (Serper) → top 5 SERP results
  */
-async function fetchSerpTop5(query: string, apiKey: string) {
+async function fetchSerpData(query: string, apiKey: string) {
   const res = await fetch("https://google.serper.dev/search", {
     method: "POST",
     headers: {
@@ -50,13 +50,24 @@ async function fetchSerpTop5(query: string, apiKey: string) {
     snippet?: string;
   }[];
 
-  return organic.slice(0, 5).map((r, i) => ({
+  const top5 = organic.slice(0, 5).map((r, i) => ({
     position: r.position || i + 1,
     title: r.title || "",
     url: r.link || "",
     domain: r.domain || "",
     snippet: r.snippet || "",
   }));
+
+  // Extract related queries
+  const relatedSearches = (data.relatedSearches || []) as { query: string }[];
+  const peopleAlsoAsk = (data.peopleAlsoAsk || []) as { question: string }[];
+
+  const relatedQueries = [
+    ...relatedSearches.map((rs) => rs.query),
+    ...peopleAlsoAsk.map((paa) => paa.question),
+  ];
+
+  return { top5, relatedQueries };
 }
 
 /**
@@ -159,12 +170,15 @@ export async function POST(request: NextRequest) {
       targetUrl
     );
 
-    // === STEP 1: Search on Google via Serper → top 5 ===
+    // === STEP 1: Search on Google via Serper → top 5 + related ===
     let serpResults: { position: number; title: string; url: string; domain: string; snippet: string }[] = [];
+    let relatedQueries: string[] = [];
     if (hasSerpApi()) {
       try {
         const env = getEnv();
-        serpResults = await fetchSerpTop5(categoryName, env.SERP_API_KEY);
+        const serpData = await fetchSerpData(categoryName, env.SERP_API_KEY);
+        serpResults = serpData.top5;
+        relatedQueries = serpData.relatedQueries;
       } catch (e) {
         console.warn("[setup] Serper failed:", e);
       }
@@ -192,7 +206,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Build suggested queries with real data
+    // Build suggested queries: main query + related from Google
     const suggestedQueries = [
       {
         query: categoryName,
@@ -207,6 +221,13 @@ export async function POST(request: NextRequest) {
             ? `GSC posição ${gscPosition}`
             : "Não encontrado na SERP nem no GSC",
       },
+      ...relatedQueries.map((q, i) => ({
+        query: q,
+        impressions: 0,
+        position: 0,
+        relevanceScore: Math.max(0.3, 1.0 - (i + 1) * 0.07),
+        source: "Google Related",
+      })),
     ];
 
     return NextResponse.json({
