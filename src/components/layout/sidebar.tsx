@@ -13,6 +13,7 @@ import {
   Settings,
   Sun,
   Moon,
+  Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/providers/theme-provider";
@@ -21,7 +22,8 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clients", label: "Clientes", icon: Users },
   { href: "/monitor", label: "Monitor", icon: Shield },
-  { href: "/opportunities", label: "Oportunidades", icon: Zap },
+  { href: "/opportunities", label: "Quick Wins", icon: Zap },
+  { href: "/opportunities/content", label: "Content Engine", icon: Lightbulb },
   { href: "/analysis/audit", label: "Auditoria SEO", icon: Search },
   { href: "/analysis/keywords", label: "Keywords", icon: MessageSquare },
   { href: "/analysis/competitors", label: "Concorrentes", icon: Users },

@@ -15,9 +15,10 @@ model Client {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  categoryWatches CategoryWatch[]
-  alerts          Alert[]
-  actionQueue     ActionQueue[]
+  categoryWatches      CategoryWatch[]
+  alerts               Alert[]
+  actionQueue          ActionQueue[]
+  contentOpportunities ContentOpportunity[]
 }
 
 model CategoryWatch {
@@ -213,4 +214,35 @@ model ActionQueue {
 
   @@index([clientId, status])
   @@index([priorityScore])
+}
+
+model ContentOpportunity {
+  id              String   @id @default(cuid())
+  clientId        String
+  siteUrl         String
+  query           String
+  pageUrl         String?
+  sourceType      String   // "quick_win" | "striking_distance" | "weak_serp" | "content_gap"
+  demandScore     Float
+  probabilityGain Float
+  businessValue   Float
+  duplicationRisk Float    @default(0)
+  operationalRisk Float    @default(0)
+  totalScore      Float
+  serpAnalysis     Json?
+  contentBrief    Json?
+  briefGeneratedAt DateTime?
+  impressions     Int      @default(0)
+  clicks          Int      @default(0)
+  ctr             Float    @default(0)
+  position        Float    @default(0)
+  status          String   @default("new")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, siteUrl, query])
+  @@index([clientId, totalScore])
+  @@index([status])
 }
