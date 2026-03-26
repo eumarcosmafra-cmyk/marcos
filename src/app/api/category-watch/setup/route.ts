@@ -7,10 +7,18 @@ import { getUrlTopQueries } from "@/services/gsc/get-url-top-queries";
 import { getGSCSites, matchDomainToGSCSite } from "@/lib/gsc-client";
 
 const setupSchema = z.object({
-  clientId: z.string().min(1),
+  clientId: z.string().optional(),
   categoryName: z.string().min(1).max(100),
   targetUrl: z.string().url(),
 });
+
+function extractDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,18 +38,24 @@ export async function POST(request: NextRequest) {
 
     const { clientId, categoryName, targetUrl } = parsed.data;
 
-    // Validate client exists — try by ID first, then upsert by domain
-    let client = await clientRepository.findById(clientId);
+    // Extract domain from targetUrl and auto-create client
+    const domain = extractDomain(targetUrl);
+
+    let client = null;
+
+    // Try finding by provided ID first
+    if (clientId) {
+      client = await clientRepository.findById(clientId);
+    }
+
+    // Try finding by domain
     if (!client) {
-      // clientId might be a domain from in-memory store, try to find or create
-      client = await clientRepository.findByDomain(clientId);
-      if (!client) {
-        try {
-          client = await clientRepository.upsertByDomain(clientId, clientId);
-        } catch {
-          return NextResponse.json({ error: "Client not found" }, { status: 404 });
-        }
-      }
+      client = await clientRepository.findByDomain(domain);
+    }
+
+    // Auto-create from domain
+    if (!client) {
+      client = await clientRepository.upsertByDomain(domain, domain);
     }
 
     // Check limit of 5 categories per client
