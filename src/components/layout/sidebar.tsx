@@ -23,10 +23,6 @@ const navItems = [
   { href: "/clients", label: "Clientes", icon: Users },
   { href: "/monitor", label: "Monitor", icon: Shield },
   { href: "/opportunities", label: "Oportunidades", icon: Zap },
-  { href: "/analysis/audit", label: "Auditoria SEO", icon: Search },
-  { href: "/analysis/keywords", label: "Keywords", icon: MessageSquare },
-  { href: "/analysis/competitors", label: "Concorrentes", icon: Users },
-  { href: "/reports", label: "Relatórios", icon: FileText },
   { href: "/settings", label: "Configurações", icon: Settings },
 ];
 
