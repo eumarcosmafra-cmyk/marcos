@@ -137,14 +137,14 @@ export default function MonitorPage() {
   }, [loadClientData]);
 
   const handleSetupCategory = async () => {
-    if (!setupName || !setupUrl || !selectedClient) return;
+    if (!setupName || !setupUrl) return;
     setSetupLoading(true);
     try {
       const res = await fetch("/api/category-watch/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientId: selectedClient,
+          ...(selectedClient && { clientId: selectedClient }),
           categoryName: setupName,
           targetUrl: setupUrl,
         }),
