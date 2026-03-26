@@ -159,7 +159,7 @@ export default function MonitorPage() {
         alert(data.error);
         return;
       }
-      setNewCategoryId(data.categoryWatch.id);
+      setNewCategoryId(data.clientId);
       setSuggestedQueries(data.suggestedQueries || []);
       setSerpResults(data.serpResults || []);
       setClientInSerp(data.clientInSerp || null);
@@ -176,21 +176,31 @@ export default function MonitorPage() {
   };
 
   const handleSelectQueries = async () => {
-    if (!newCategoryId || !selectedPrimary || selectedRelated.length === 0) return;
+    if (!newCategoryId || !selectedPrimary) return;
     setSetupLoading(true);
     try {
-      await fetch("/api/category-watch/select-query", {
+      const res = await fetch("/api/category-watch/select-query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          categoryWatchId: newCategoryId,
+          clientId: newCategoryId,
+          categoryName: setupName,
+          targetUrl: setupUrl,
           primaryQuery: selectedPrimary,
           relatedQueries: selectedRelated,
         }),
       });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
       setShowSetup(false);
       setNewCategoryId(null);
       setSuggestedQueries([]);
+      setSerpResults([]);
+      setClientInSerp(null);
+      setGscData(null);
       setSetupName("");
       setSetupUrl("");
       setSelectedPrimary("");
@@ -791,15 +801,15 @@ export default function MonitorPage() {
                   <button
                     onClick={handleSelectQueries}
                     disabled={
-                      setupLoading ||
-                      !selectedPrimary ||
-                      selectedRelated.length === 0
+                      setupLoading || !selectedPrimary
                     }
                     className="btn-primary"
                   >
                     {setupLoading
-                      ? "Salvando e mapeando SERP..."
-                      : `Salvar cluster (1 principal + ${selectedRelated.length} relacionadas)`}
+                      ? "Salvando..."
+                      : selectedRelated.length > 0
+                        ? `Salvar (1 principal + ${selectedRelated.length} relacionadas)`
+                        : "Salvar categoria"}
                   </button>
                 </div>
               )}

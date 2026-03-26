@@ -227,22 +227,7 @@ export async function POST(request: NextRequest) {
     if (!client) client = await clientRepository.findByDomain(domain);
     if (!client) client = await clientRepository.upsertByDomain(domain, domain);
 
-    // Check limit
-    const count = await categoryWatchRepository.countByClient(client.id);
-    if (count >= 5) {
-      return NextResponse.json(
-        { error: "Limite de 5 categorias por cliente atingido" },
-        { status: 400 }
-      );
-    }
-
-    // Create category watch
-    const categoryWatch = await categoryWatchRepository.create(
-      client.id,
-      categoryName,
-      targetUrl
-    );
-
+    // DON'T create category watch yet — just search first
     // === STEP 1: Search on Google via Serper → top 5 + related ===
     let serpResults: { position: number; title: string; url: string; domain: string; snippet: string }[] = [];
     let relatedQueries: string[] = [];
@@ -304,7 +289,7 @@ export async function POST(request: NextRequest) {
     ];
 
     return NextResponse.json({
-      categoryWatch,
+      clientId: client.id,
       suggestedQueries,
       serpResults,
       clientInSerp: serpCheck,

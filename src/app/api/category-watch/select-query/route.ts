@@ -5,9 +5,12 @@ import { categoryWatchRepository } from "@/repositories/category-watch-repositor
 import { mapSerpResults } from "@/services/serp/map-serp-results";
 
 const selectQuerySchema = z.object({
-  categoryWatchId: z.string().min(1),
+  categoryWatchId: z.string().optional(),
+  clientId: z.string().optional(),
+  categoryName: z.string().optional(),
+  targetUrl: z.string().optional(),
   primaryQuery: z.string().min(1),
-  relatedQueries: z.array(z.string().min(1)).min(1).max(5),
+  relatedQueries: z.array(z.string().min(1)).max(5).default([]),
 });
 
 export async function POST(request: NextRequest) {
@@ -21,20 +24,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { categoryWatchId, primaryQuery, relatedQueries } = parsed.data;
+    const { categoryWatchId, clientId, categoryName, targetUrl, primaryQuery, relatedQueries } = parsed.data;
 
-    // Validate category exists
-    const category = await categoryWatchRepository.findById(categoryWatchId);
+    // Find or create category
+    let catId = categoryWatchId;
+    if (!catId && clientId && categoryName && targetUrl) {
+      // Check limit
+      const count = await categoryWatchRepository.countByClient(clientId);
+      if (count >= 5) {
+        return NextResponse.json(
+          { error: "Limite de 5 categorias por cliente atingido" },
+          { status: 400 }
+        );
+      }
+      const newCat = await categoryWatchRepository.create(clientId, categoryName, targetUrl);
+      catId = newCat.id;
+    }
+
+    if (!catId) {
+      return NextResponse.json({ error: "categoryWatchId or clientId+categoryName+targetUrl required" }, { status: 400 });
+    }
+
+    const category = await categoryWatchRepository.findById(catId);
     if (!category) {
-      return NextResponse.json(
-        { error: "Category not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Category not found" }, { status: 404 });
     }
 
     // Save query cluster
     const cluster = await trackedQueryRepository.upsertCluster(
-      categoryWatchId,
+      catId,
       primaryQuery,
       relatedQueries
     );
