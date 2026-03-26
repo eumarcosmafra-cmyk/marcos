@@ -78,6 +78,13 @@ export default function MonitorPage() {
   const [newCategoryId, setNewCategoryId] = useState<string | null>(null);
   const [selectedPrimary, setSelectedPrimary] = useState<string>("");
   const [selectedRelated, setSelectedRelated] = useState<string[]>([]);
+  const [serpResults, setSerpResults] = useState<
+    { position: number; title: string; url: string; domain: string; snippet: string }[]
+  >([]);
+  const [clientInSerp, setClientInSerp] = useState<
+    { found: boolean; position: number | null; match: string | null } | null
+  >(null);
+  const [gscPosition, setGscPosition] = useState<number | null>(null);
 
   // Fetch clients — auto-sync from GSC if DB is empty
   useEffect(() => {
@@ -149,6 +156,9 @@ export default function MonitorPage() {
       }
       setNewCategoryId(data.categoryWatch.id);
       setSuggestedQueries(data.suggestedQueries || []);
+      setSerpResults(data.serpResults || []);
+      setClientInSerp(data.clientInSerp || null);
+      setGscPosition(data.gscPosition || null);
       if (data.suggestedQueries?.length > 0) {
         setSelectedPrimary(data.suggestedQueries[0].query);
       }
@@ -549,61 +559,126 @@ export default function MonitorPage() {
                   </button>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                    Selecione a query principal e 1-5 queries relacionadas:
-                  </p>
-                  <div className="space-y-1">
-                    {suggestedQueries.map((q) => (
-                      <div
-                        key={q.query}
-                        className={cn(
-                          "flex cursor-pointer items-center justify-between rounded-lg p-2 transition-colors",
-                          selectedPrimary === q.query
-                            ? "bg-brand-600/20"
-                            : selectedRelated.includes(q.query)
-                              ? "bg-emerald-600/10"
-                              : "hover:bg-[var(--glass-hover)]"
-                        )}
-                      >
-                        <div
-                          className="flex-1"
-                          onClick={() => {
-                            setSelectedPrimary(q.query);
-                            setSelectedRelated((prev) =>
-                              prev.filter((p) => p !== q.query)
-                            );
-                          }}
-                        >
-                          <span className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
-                            {q.query}
-                          </span>
-                          <span className="ml-2 text-[10px]" style={{ color: "var(--text-muted)" }}>
-                            {q.impressions} imp | pos {q.position.toFixed(1)}
-                          </span>
-                        </div>
-                        {selectedPrimary === q.query ? (
-                          <span className="text-[10px] font-medium text-brand-400">
-                            PRINCIPAL
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => toggleRelated(q.query)}
+                <div className="space-y-4">
+                  {/* SERP Results - Top 5 */}
+                  {serpResults.length > 0 && (
+                    <div>
+                      <h4 className="mb-2 text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                        Top 5 Google para &quot;{suggestedQueries[0]?.query}&quot;
+                      </h4>
+                      <div className="space-y-1">
+                        {serpResults.map((r) => (
+                          <div
+                            key={r.url}
                             className={cn(
-                              "rounded px-2 py-0.5 text-[10px]",
-                              selectedRelated.includes(q.query)
-                                ? "bg-emerald-600/20 text-emerald-400"
-                                : "text-[var(--text-muted)] hover:bg-[var(--glass-hover)]"
+                              "flex items-center gap-3 rounded-lg p-2",
+                              clientInSerp?.found && clientInSerp.position === r.position
+                                ? "bg-emerald-600/20 ring-1 ring-emerald-500/30"
+                                : "bg-white/[0.02]"
                             )}
                           >
-                            {selectedRelated.includes(q.query)
-                              ? "Selecionada"
-                              : "Relacionar"}
-                          </button>
-                        )}
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold" style={{ color: "var(--text-primary)" }}>
+                              {r.position}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+                                {r.title}
+                              </p>
+                              <p className="truncate text-[10px]" style={{ color: "var(--text-muted)" }}>
+                                {r.domain} — {r.url}
+                              </p>
+                            </div>
+                            {clientInSerp?.found && clientInSerp.position === r.position && (
+                              <span className="shrink-0 rounded-full bg-emerald-600/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                                Seu site
+                              </span>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                  )}
+
+                  {/* Client position summary */}
+                  <div className={cn(
+                    "rounded-lg p-3",
+                    clientInSerp?.found ? "bg-emerald-600/10" : "bg-yellow-600/10"
+                  )}>
+                    {clientInSerp?.found ? (
+                      <p className="text-xs text-emerald-400">
+                        ✓ Seu site está na <strong>posição {clientInSerp.position}</strong> da SERP ({clientInSerp.match === "exact" ? "URL exata" : "mesmo domínio"})
+                      </p>
+                    ) : (
+                      <p className="text-xs text-yellow-400">
+                        ✗ Seu site não aparece no Top 5 da SERP
+                        {gscPosition ? (
+                          <span> — Posição no GSC: <strong>{gscPosition}</strong></span>
+                        ) : (
+                          <span> — Sem dados no Google Search Console</span>
+                        )}
+                      </p>
+                    )}
                   </div>
+
+                  {/* Query selection */}
+                  <div>
+                    <p className="mb-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+                      Selecione a query principal e 1-5 queries relacionadas:
+                    </p>
+                    <div className="space-y-1">
+                      {suggestedQueries.map((q) => (
+                        <div
+                          key={q.query}
+                          className={cn(
+                            "flex cursor-pointer items-center justify-between rounded-lg p-2 transition-colors",
+                            selectedPrimary === q.query
+                              ? "bg-brand-600/20"
+                              : selectedRelated.includes(q.query)
+                                ? "bg-emerald-600/10"
+                                : "hover:bg-[var(--glass-hover)]"
+                          )}
+                        >
+                          <div
+                            className="flex-1"
+                            onClick={() => {
+                              setSelectedPrimary(q.query);
+                              setSelectedRelated((prev) =>
+                                prev.filter((p) => p !== q.query)
+                              );
+                            }}
+                          >
+                            <span className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+                              {q.query}
+                            </span>
+                            <span className="ml-2 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                              {q.position > 0 ? `pos ${q.position}` : "sem posição"}
+                              {(q as { source?: string }).source && ` · ${(q as { source?: string }).source}`}
+                            </span>
+                          </div>
+                          {selectedPrimary === q.query ? (
+                            <span className="text-[10px] font-medium text-brand-400">
+                              PRINCIPAL
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => toggleRelated(q.query)}
+                              className={cn(
+                                "rounded px-2 py-0.5 text-[10px]",
+                                selectedRelated.includes(q.query)
+                                  ? "bg-emerald-600/20 text-emerald-400"
+                                  : "text-[var(--text-muted)] hover:bg-[var(--glass-hover)]"
+                              )}
+                            >
+                              {selectedRelated.includes(q.query)
+                                ? "Selecionada"
+                                : "Relacionar"}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   <button
                     onClick={handleSelectQueries}
                     disabled={

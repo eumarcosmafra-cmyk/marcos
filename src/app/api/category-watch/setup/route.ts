@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { categoryWatchRepository } from "@/repositories/category-watch-repository";
 import { clientRepository } from "@/repositories/client-repository";
 import { getEnv, hasSerpApi } from "@/lib/env";
+import { getSearchAnalytics, getGSCSites, matchDomainToGSCSite, getDateRange } from "@/lib/gsc-client";
 
 const setupSchema = z.object({
   clientId: z.string().optional(),
@@ -19,15 +20,10 @@ function extractDomain(url: string): string {
   }
 }
 
-interface SerperRelatedSearch {
-  query: string;
-}
-
-async function fetchRelatedQueries(
-  categoryName: string,
-  apiKey: string
-): Promise<{ query: string; impressions: number; position: number; relevanceScore: number }[]> {
-  // Search for the category name to get related searches and "people also ask"
+/**
+ * STEP 1: Search the category name on Google (Serper) → top 5 SERP results
+ */
+async function fetchSerpTop5(query: string, apiKey: string) {
   const res = await fetch("https://google.serper.dev/search", {
     method: "POST",
     headers: {
@@ -35,7 +31,7 @@ async function fetchRelatedQueries(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      q: categoryName,
+      q: query,
       gl: "br",
       hl: "pt-br",
       location: "Brazil",
@@ -43,45 +39,83 @@ async function fetchRelatedQueries(
     }),
   });
 
-  if (!res.ok) {
-    throw new Error(`Serper API error: ${res.status}`);
-  }
+  if (!res.ok) throw new Error(`Serper error: ${res.status}`);
 
   const data = await res.json();
+  const organic = (data.organic || []) as {
+    position?: number;
+    title?: string;
+    link?: string;
+    domain?: string;
+    snippet?: string;
+  }[];
 
-  const queries: { query: string; impressions: number; position: number; relevanceScore: number }[] = [];
+  return organic.slice(0, 5).map((r, i) => ({
+    position: r.position || i + 1,
+    title: r.title || "",
+    url: r.link || "",
+    domain: r.domain || "",
+    snippet: r.snippet || "",
+  }));
+}
 
-  // Add the main query
-  queries.push({
-    query: categoryName,
-    impressions: 1000,
-    position: 1,
-    relevanceScore: 1.0,
+/**
+ * STEP 2: Check if client URL is in SERP results
+ */
+function findClientInSerp(
+  serpResults: { position: number; url: string; domain: string }[],
+  targetUrl: string
+) {
+  const targetDomain = extractDomain(targetUrl);
+  const targetPath = targetUrl.replace(/\/$/, "").toLowerCase();
+
+  // Exact URL match
+  const exactMatch = serpResults.find(
+    (r) => r.url.replace(/\/$/, "").toLowerCase() === targetPath
+  );
+  if (exactMatch) return { found: true, position: exactMatch.position, match: "exact" };
+
+  // Domain match
+  const domainMatch = serpResults.find(
+    (r) => extractDomain(r.url) === targetDomain
+  );
+  if (domainMatch) return { found: true, position: domainMatch.position, match: "domain" };
+
+  return { found: false, position: null, match: null };
+}
+
+/**
+ * STEP 3: If not in SERP, get position from GSC for query + URL
+ */
+async function getGSCPosition(
+  accessToken: string,
+  gscSiteUrl: string,
+  query: string,
+  targetUrl: string
+): Promise<number | null> {
+  const { startDate, endDate } = getDateRange("28d");
+
+  const rows = await getSearchAnalytics(accessToken, gscSiteUrl, {
+    startDate,
+    endDate,
+    dimensions: ["query", "page"],
+    rowLimit: 500,
   });
 
-  // Add related searches from Serper
-  const relatedSearches = (data.relatedSearches || []) as SerperRelatedSearch[];
-  relatedSearches.forEach((rs: SerperRelatedSearch, i: number) => {
-    queries.push({
-      query: rs.query,
-      impressions: Math.max(100, 800 - i * 80),
-      position: i + 2,
-      relevanceScore: Math.max(0.3, 1.0 - i * 0.08),
-    });
+  const targetNorm = targetUrl.replace(/\/$/, "").toLowerCase();
+
+  type RawRow = {
+    keys?: string[];
+    position?: number;
+  };
+
+  const match = (rows as RawRow[]).find((r) => {
+    const rowQuery = (r.keys?.[0] || "").toLowerCase();
+    const rowPage = (r.keys?.[1] || "").replace(/\/$/, "").toLowerCase();
+    return rowQuery === query.toLowerCase() && (rowPage === targetNorm || rowPage.startsWith(targetNorm));
   });
 
-  // Add "people also ask" questions
-  const peopleAlsoAsk = (data.peopleAlsoAsk || []) as { question: string }[];
-  peopleAlsoAsk.forEach((paa: { question: string }, i: number) => {
-    queries.push({
-      query: paa.question,
-      impressions: Math.max(50, 500 - i * 60),
-      position: relatedSearches.length + i + 2,
-      relevanceScore: Math.max(0.2, 0.8 - i * 0.1),
-    });
-  });
-
-  return queries;
+  return match?.position ? Number(match.position.toFixed(1)) : null;
 }
 
 export async function POST(request: NextRequest) {
@@ -101,28 +135,15 @@ export async function POST(request: NextRequest) {
     }
 
     const { clientId, categoryName, targetUrl } = parsed.data;
-
-    // Extract domain from targetUrl and auto-create client
     const domain = extractDomain(targetUrl);
 
+    // Find or create client
     let client = null;
+    if (clientId) client = await clientRepository.findById(clientId);
+    if (!client) client = await clientRepository.findByDomain(domain);
+    if (!client) client = await clientRepository.upsertByDomain(domain, domain);
 
-    // Try finding by provided ID first
-    if (clientId) {
-      client = await clientRepository.findById(clientId);
-    }
-
-    // Try finding by domain
-    if (!client) {
-      client = await clientRepository.findByDomain(domain);
-    }
-
-    // Auto-create from domain
-    if (!client) {
-      client = await clientRepository.upsertByDomain(domain, domain);
-    }
-
-    // Check limit of 5 categories per client
+    // Check limit
     const count = await categoryWatchRepository.countByClient(client.id);
     if (count >= 5) {
       return NextResponse.json(
@@ -138,35 +159,62 @@ export async function POST(request: NextRequest) {
       targetUrl
     );
 
-    // Fetch related queries from Google via Serper API
-    let suggestedQueries: { query: string; impressions: number; position: number; relevanceScore: number }[] = [];
+    // === STEP 1: Search on Google via Serper → top 5 ===
+    let serpResults: { position: number; title: string; url: string; domain: string; snippet: string }[] = [];
     if (hasSerpApi()) {
       try {
         const env = getEnv();
-        suggestedQueries = await fetchRelatedQueries(categoryName, env.SERP_API_KEY);
+        serpResults = await fetchSerpTop5(categoryName, env.SERP_API_KEY);
       } catch (e) {
-        console.warn("[setup] Serper query failed:", e);
-        // Return at least the category name as a query
-        suggestedQueries = [{
-          query: categoryName,
-          impressions: 0,
-          position: 0,
-          relevanceScore: 1.0,
-        }];
+        console.warn("[setup] Serper failed:", e);
       }
-    } else {
-      // No API key — return category name as fallback
-      suggestedQueries = [{
+    }
+
+    // === STEP 2: Check if client URL is in SERP ===
+    const serpCheck = findClientInSerp(serpResults, targetUrl);
+
+    // === STEP 3: If not in SERP, get position from GSC ===
+    let gscPosition: number | null = null;
+    if (!serpCheck.found) {
+      try {
+        const sites = await getGSCSites(session.accessToken);
+        const gscSite = matchDomainToGSCSite(client.domain, sites);
+        if (gscSite) {
+          gscPosition = await getGSCPosition(
+            session.accessToken,
+            gscSite,
+            categoryName,
+            targetUrl
+          );
+        }
+      } catch (e) {
+        console.warn("[setup] GSC fallback failed:", e);
+      }
+    }
+
+    // Build suggested queries with real data
+    const suggestedQueries = [
+      {
         query: categoryName,
         impressions: 0,
-        position: 0,
+        position: serpCheck.found
+          ? serpCheck.position!
+          : gscPosition ?? 0,
         relevanceScore: 1.0,
-      }];
-    }
+        source: serpCheck.found
+          ? `SERP Top ${serpCheck.position} (${serpCheck.match})`
+          : gscPosition
+            ? `GSC posição ${gscPosition}`
+            : "Não encontrado na SERP nem no GSC",
+      },
+    ];
 
     return NextResponse.json({
       categoryWatch,
       suggestedQueries,
+      serpResults,
+      clientInSerp: serpCheck,
+      gscPosition,
     });
   } catch (error) {
     console.error("[category-watch/setup] Error:", error);
