@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getGSCSites, getSiteOverview, getDateRange } from "@/lib/gsc-client";
-import { getClients, addClient } from "@/lib/store";
-import { generateId } from "@/lib/utils";
+import { clientRepository } from "@/repositories/client-repository";
 
 function extractDomain(siteUrl: string): string {
   return siteUrl
@@ -24,56 +23,50 @@ export async function POST() {
     }
 
     const sites = await getGSCSites(session.accessToken);
-    const existingClients = getClients();
-    const newClients = [];
+    const syncedClients = [];
 
     for (const site of sites) {
       const domain = extractDomain(site.siteUrl);
-      const exists = existingClients.some(
-        (c) => c.domain.toLowerCase() === domain.toLowerCase()
-      );
 
-      if (!exists) {
-        // Fetch real GSC data for indicators
-        const { startDate, endDate } = getDateRange("28d");
-        let indicators;
-        try {
-          const overview = await getSiteOverview(
-            session.accessToken,
-            site.siteUrl,
-            startDate,
-            endDate
-          );
-          indicators = {
-            impressions: overview.totalImpressions,
-            clicks: overview.totalClicks,
-            ctr: overview.avgCtr,
-            position: overview.avgPosition,
-          };
-        } catch {
-          indicators = undefined;
-        }
+      // Upsert client in DB
+      const client = await clientRepository.upsertByDomain(domain, domain);
 
-        const client = {
-          id: generateId(),
-          name: domain,
-          domain,
-          industry: "",
-          status: "active" as const,
-          createdAt: new Date().toISOString(),
-          gscSiteUrl: site.siteUrl,
-          indicators,
+      // Fetch real GSC data for indicators
+      const { startDate, endDate } = getDateRange("28d");
+      let indicators;
+      try {
+        const overview = await getSiteOverview(
+          session.accessToken,
+          site.siteUrl,
+          startDate,
+          endDate
+        );
+        indicators = {
+          impressions: overview.totalImpressions,
+          clicks: overview.totalClicks,
+          ctr: overview.avgCtr,
+          position: overview.avgPosition,
         };
-
-        addClient(client);
-        newClients.push(client);
+      } catch {
+        indicators = undefined;
       }
+
+      syncedClients.push({
+        id: client.id,
+        name: client.name,
+        domain: client.domain,
+        industry: "",
+        status: "active" as const,
+        createdAt: client.createdAt.toISOString(),
+        gscSiteUrl: site.siteUrl,
+        indicators,
+      });
     }
 
     return NextResponse.json({
-      synced: newClients.length,
-      total: getClients().length,
-      clients: getClients(),
+      synced: syncedClients.length,
+      total: syncedClients.length,
+      clients: syncedClients,
     });
   } catch (error) {
     console.error("GSC sync error:", error);
