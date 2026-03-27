@@ -32,11 +32,11 @@ async function fetchSerpData(query: string, apiKey: string) {
     },
     body: JSON.stringify({
       q: query,
-      type: "search",
-      engine: "google",
       gl: "br",
       hl: "pt-br",
       num: 10,
+      type: "search",
+      engine: "google",
     }),
   });
 

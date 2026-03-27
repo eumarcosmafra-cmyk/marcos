@@ -51,11 +51,11 @@ async function fetchFromSerper(
     },
     body: JSON.stringify({
       q: query,
-      type: "search",
-      engine: "google",
       gl: "br",
       hl: language,
       num: 10,
+      type: "search",
+      engine: "google",
     }),
   });
 

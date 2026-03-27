@@ -125,7 +125,7 @@ export async function GET(request: NextRequest, context: Params) {
           const res = await fetch("https://google.serper.dev/search", {
             method: "POST",
             headers: { "X-API-KEY": env.SERP_API_KEY, "Content-Type": "application/json" },
-            body: JSON.stringify({ q: query, type: "search", engine: "google", gl: "br", hl: "pt-br", num: 5 }),
+            body: JSON.stringify({ q: query, gl: "br", hl: "pt-br", num: 5, type: "search", engine: "google" }),
           });
           if (res.ok) {
             const data = await res.json();
