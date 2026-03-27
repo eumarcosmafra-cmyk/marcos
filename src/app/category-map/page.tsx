@@ -693,7 +693,7 @@ export default function CategoryMapPage() {
   // State
   const [sitemapUrl, setSitemapUrl] = useState("");
   const [selectedSite, setSelectedSite] = useState("");
-  const [period, setPeriod] = useState("28d");
+  const [period, setPeriod] = useState("3m");
   const [categories, setCategories] = useState<CategoryNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<CategoryNode | null>(null);

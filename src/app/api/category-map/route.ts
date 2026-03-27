@@ -9,7 +9,7 @@ import type { CategoryMapData, CategoryNode } from "@/types/category-map";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sitemapUrl, siteUrl, period = "28d", useMock = false } = body;
+    const { sitemapUrl, siteUrl, period = "3m", useMock = false } = body;
 
     // Mock mode — no auth needed
     if (useMock) {

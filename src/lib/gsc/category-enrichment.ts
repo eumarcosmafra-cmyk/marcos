@@ -53,7 +53,7 @@ export async function enrichCategoriesWithGSC(
   accessToken: string,
   siteUrl: string,
   categoryUrls: SitemapUrl[],
-  period = "28d"
+  period = "3m"
 ): Promise<CategoryNode[]> {
   const { startDate, endDate } = getDateRange(period);
   const brandName = extractBrandName(siteUrl);
@@ -75,10 +75,10 @@ export async function enrichCategoriesWithGSC(
     const { slug, depth, parentUrl } = analyzeUrlStructure(catUrl.loc);
     const isHome = isHomepageOrSpecial(catUrl.loc);
 
-    // Find all GSC rows matching this URL
+    // Find all GSC rows matching this EXACT URL (no startsWith to avoid parent stealing child data)
     const matching = gscRows.filter((r) => {
       const page = (r.keys?.[1] || "").replace(/\/$/, "").toLowerCase();
-      return page === urlNorm || page.startsWith(urlNorm);
+      return page === urlNorm;
     });
 
     if (matching.length === 0) {
