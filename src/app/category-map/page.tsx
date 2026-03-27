@@ -42,6 +42,7 @@ interface CategoryNode {
   serpChecked?: boolean;
   serpMatch?: string | null;
   serpTop10?: { position: number; domain: string; title: string; url: string }[];
+  serpQuery?: string;
 }
 
 interface ApiResponse {
@@ -413,7 +414,7 @@ function DetailDrawer({
           {category.serpChecked && category.serpTop10 && category.serpTop10.length > 0 && (
             <div>
               <p className="mb-2 text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-                SERP Real — &quot;{category.topQuery}&quot;
+                SERP Real — &quot;{category.serpQuery || category.topQuery}&quot;
               </p>
               <div className="space-y-1">
                 {category.serpTop10.map((r) => {
@@ -824,6 +825,7 @@ export default function CategoryMapPage() {
         serpChecked: true,
         serpMatch: data.match ?? null,
         serpTop10: data.top10 ?? [],
+        serpQuery: cat.topQuery,
       };
       setCategories((prev) =>
         prev.map((c) => c.id === cat.id ? { ...c, ...update } : c)

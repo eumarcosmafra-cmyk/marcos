@@ -30,26 +30,33 @@ export async function POST(request: NextRequest) {
     }
 
     const env = getEnv();
+
+    const requestBody = {
+      q: query,
+      gl: "br",
+      hl: "pt-br",
+      num: 30,
+    };
+
+    console.log("[serp-check] Request:", JSON.stringify(requestBody));
+
     const res = await fetch("https://google.serper.dev/search", {
       method: "POST",
       headers: {
         "X-API-KEY": env.SERP_API_KEY,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        q: query,
-        gl: "br",
-        hl: "pt-br",
-        location: "Brazil",
-        num: 30,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!res.ok) {
+      const errorText = await res.text();
+      console.error("[serp-check] Serper error:", res.status, errorText);
       return NextResponse.json({ error: `Serper error: ${res.status}` }, { status: 500 });
     }
 
     const data = await res.json();
+    console.log("[serp-check] Query:", query, "Results:", (data.organic || []).length, "First:", (data.organic?.[0]?.title || "none"));
     const rawOrganic = (data.organic || []) as {
       position?: number;
       link?: string;
@@ -137,6 +144,7 @@ export async function POST(request: NextRequest) {
       position: null,
       match: null,
       top10,
+      debug: { querySent: query, totalRaw: rawOrganic.length, totalFiltered: organic.length },
     });
   } catch (error) {
     console.error("[category-map/serp-check] Error:", error);
