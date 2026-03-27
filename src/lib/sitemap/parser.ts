@@ -125,6 +125,11 @@ export function slugToName(slug: string): string {
  * Filter URLs to keep only likely product pages.
  * Product pages typically have deeper paths, specific slugs, or product-like patterns.
  */
+/**
+ * Filter URLs to keep only likely product pages.
+ * Less aggressive than category filter — if the user provides a product sitemap,
+ * we trust it and only skip obvious non-product pages.
+ */
 export function filterProductUrls(urls: SitemapUrl[]): SitemapUrl[] {
   return urls.filter((u) => {
     try {
@@ -137,24 +142,10 @@ export function filterProductUrls(urls: SitemapUrl[]): SitemapUrl[] {
       if (/\.(xml|json|jpg|png|pdf)$/i.test(path)) return false;
 
       // Skip known non-product patterns
-      if (/\/(blog|post|article|news|tag|author|page|wp-|admin|cart|checkout|account|login|sitemap|politica|termos|faq|contato|sobre)/i.test(path)) return false;
+      if (/\/(blog|post|article|news|tag|author|page|wp-|admin|cart|checkout|account|login|sitemap|politica|termos|faq|contato|sobre)\b/i.test(path)) return false;
 
-      const segments = path.split("/").filter(Boolean);
-
-      // Products usually have 2+ path segments (category/product)
-      if (segments.length < 2) return false;
-
-      // Product URLs typically have longer slugs with hyphens
-      const lastSegment = segments[segments.length - 1] || "";
-      if (lastSegment.split("-").length >= 2) return true;
-
-      // URLs with numeric IDs are likely products
-      if (/\d{3,}/.test(lastSegment)) return true;
-
-      // Deep URLs (3+ segments) are more likely products
-      if (segments.length >= 3) return true;
-
-      return false;
+      // Accept everything else — the user provided a product sitemap, trust it
+      return true;
     } catch {
       return false;
     }
