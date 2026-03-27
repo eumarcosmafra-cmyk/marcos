@@ -38,8 +38,10 @@ interface CategoryNode {
   status: "well_positioned" | "opportunity" | "critical";
   score: number;
   priorityScore?: number;
-  serpPosition?: number | null; // Real SERP position from Serper
+  serpPosition?: number | null;
   serpChecked?: boolean;
+  serpMatch?: string | null;
+  serpTop10?: { position: number; domain: string; title: string; url: string }[];
 }
 
 interface ApiResponse {
@@ -80,6 +82,14 @@ const STATUS_CONFIG = {
 // ---------------------------------------------------------------------------
 // Diagnosis
 // ---------------------------------------------------------------------------
+
+function normalizeDomainForMatch(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
+}
 
 function getDiagnosis(cat: CategoryNode): string {
   if (cat.status === "well_positioned") {
@@ -398,6 +408,40 @@ function DetailDrawer({
               </div>
             ))}
           </div>
+
+          {/* SERP Top 10 Results */}
+          {category.serpChecked && category.serpTop10 && category.serpTop10.length > 0 && (
+            <div>
+              <p className="mb-2 text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                SERP Real — &quot;{category.topQuery}&quot;
+              </p>
+              <div className="space-y-1">
+                {category.serpTop10.map((r) => {
+                  const isClient = r.domain.includes(normalizeDomainForMatch(category.url));
+                  return (
+                    <div
+                      key={r.url}
+                      className={cn("flex items-center gap-2 rounded px-2 py-1.5", isClient && "bg-emerald-600/15 ring-1 ring-emerald-500/20")}
+                    >
+                      <span
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
+                        style={{ background: "var(--glass-border)", color: "var(--text-primary)" }}
+                      >
+                        {r.position}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[10px] font-medium" style={{ color: isClient ? "rgb(52, 211, 153)" : "var(--text-primary)" }}>
+                          {r.title}
+                        </p>
+                        <p className="truncate text-[9px]" style={{ color: "var(--text-muted)" }}>{r.domain}</p>
+                      </div>
+                      {isClient && <span className="shrink-0 text-[9px] font-medium text-emerald-400">Você</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Diagnosis */}
           <div
@@ -774,18 +818,17 @@ export default function CategoryMapPage() {
         body: JSON.stringify({ query: cat.topQuery, targetUrl: cat.url }),
       });
       const data = await res.json();
+      const update = {
+        serpPosition: data.position ?? null,
+        serpChecked: true,
+        serpMatch: data.match ?? null,
+        serpTop10: data.top10 ?? [],
+      };
       setCategories((prev) =>
-        prev.map((c) =>
-          c.id === cat.id
-            ? { ...c, serpPosition: data.position ?? null, serpChecked: true }
-            : c
-        )
+        prev.map((c) => c.id === cat.id ? { ...c, ...update } : c)
       );
-      // Update detail drawer if open
       if (selectedCategory?.id === cat.id) {
-        setSelectedCategory((prev) =>
-          prev ? { ...prev, serpPosition: data.position ?? null, serpChecked: true } : prev
-        );
+        setSelectedCategory((prev) => prev ? { ...prev, ...update } : prev);
       }
     } catch {}
     setCheckingSerpId(null);

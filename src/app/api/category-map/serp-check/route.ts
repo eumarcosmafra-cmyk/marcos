@@ -7,6 +7,14 @@ const schema = z.object({
   targetUrl: z.string().min(1),
 });
 
+function normalizeDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return url.replace(/^www\./, "").toLowerCase();
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -47,20 +55,25 @@ export async function POST(request: NextRequest) {
       link?: string;
       domain?: string;
       title?: string;
+      snippet?: string;
     }[];
 
-    // Extract target domain for matching
-    let targetDomain = "";
-    try {
-      targetDomain = new URL(targetUrl).hostname.replace(/^www\./, "").toLowerCase();
-    } catch {}
-
+    const targetDomain = normalizeDomain(targetUrl);
     const targetNorm = targetUrl.replace(/\/$/, "").toLowerCase();
 
-    // Find exact URL match first
-    const exactMatch = organic.find(
-      (r) => (r.link || "").replace(/\/$/, "").toLowerCase() === targetNorm
-    );
+    // Build top 10 for display
+    const top10 = organic.slice(0, 10).map((r, i) => ({
+      position: r.position || i + 1,
+      domain: r.domain || normalizeDomain(r.link || ""),
+      title: r.title || "",
+      url: r.link || "",
+    }));
+
+    // Find exact URL match
+    const exactMatch = organic.find((r) => {
+      const link = (r.link || "").replace(/\/$/, "").toLowerCase();
+      return link === targetNorm;
+    });
 
     if (exactMatch) {
       return NextResponse.json({
@@ -68,19 +81,15 @@ export async function POST(request: NextRequest) {
         match: "exact",
         url: exactMatch.link,
         title: exactMatch.title,
-        top5: organic.slice(0, 5).map((r, i) => ({
-          position: r.position || i + 1,
-          domain: r.domain || "",
-          title: r.title || "",
-          url: r.link || "",
-        })),
+        top10,
       });
     }
 
-    // Try domain match
-    const domainMatch = organic.find(
-      (r) => (r.domain || "").replace(/^www\./, "").toLowerCase() === targetDomain
-    );
+    // Domain match — normalize both sides
+    const domainMatch = organic.find((r) => {
+      const rDomain = normalizeDomain(r.link || "");
+      return rDomain === targetDomain;
+    });
 
     if (domainMatch) {
       return NextResponse.json({
@@ -88,25 +97,31 @@ export async function POST(request: NextRequest) {
         match: "domain",
         url: domainMatch.link,
         title: domainMatch.title,
-        top5: organic.slice(0, 5).map((r, i) => ({
-          position: r.position || i + 1,
-          domain: r.domain || "",
-          title: r.title || "",
-          url: r.link || "",
-        })),
+        top10,
       });
     }
 
-    // Not found in top 30
+    // Partial domain match (e.g. subdomain, different path)
+    const partialMatch = organic.find((r) => {
+      const rDomain = normalizeDomain(r.link || "");
+      return rDomain.includes(targetDomain) || targetDomain.includes(rDomain);
+    });
+
+    if (partialMatch) {
+      return NextResponse.json({
+        position: partialMatch.position,
+        match: "partial",
+        url: partialMatch.link,
+        title: partialMatch.title,
+        top10,
+      });
+    }
+
+    // Not found
     return NextResponse.json({
       position: null,
       match: null,
-      top5: organic.slice(0, 5).map((r, i) => ({
-        position: r.position || i + 1,
-        domain: r.domain || "",
-        title: r.title || "",
-        url: r.link || "",
-      })),
+      top10,
     });
   } catch (error) {
     console.error("[category-map/serp-check] Error:", error);
