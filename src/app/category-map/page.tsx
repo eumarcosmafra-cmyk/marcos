@@ -269,9 +269,13 @@ function PositionGroupGrid({
 function DetailDrawer({
   category,
   onClose,
+  onCheckSerp,
+  checkingSerpId,
 }: {
   category: CategoryNode | null;
   onClose: () => void;
+  onCheckSerp?: (c: CategoryNode) => void;
+  checkingSerpId?: string | null;
 }) {
   if (!category) return null;
   const cfg = STATUS_CONFIG[category.status];
@@ -340,9 +344,43 @@ function DetailDrawer({
 
           {/* Metrics grid */}
           <div className="grid grid-cols-2 gap-3">
+            {/* SERP Real — with check button */}
+            <div
+              className={cn(
+                "glass-card p-3",
+                !category.serpChecked && onCheckSerp && "cursor-pointer hover:bg-[var(--glass-hover)] transition-colors"
+              )}
+              onClick={() => {
+                if (!category.serpChecked && onCheckSerp && category.topQuery && !category.topQuery.startsWith("(")) {
+                  onCheckSerp(category);
+                }
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Search className="h-3 w-3" style={{ color: "var(--text-muted)" }} />
+                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>SERP Real</span>
+                </div>
+                {!category.serpChecked && onCheckSerp && category.topQuery && !category.topQuery.startsWith("(") && (
+                  <span className="rounded bg-brand-600 px-2 py-0.5 text-[9px] font-medium text-white">
+                    {checkingSerpId === category.id ? (
+                      <Loader2 className="inline h-2.5 w-2.5 animate-spin" />
+                    ) : (
+                      "Buscar"
+                    )}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-lg font-bold" style={{ color: category.serpChecked && category.serpPosition ? cfg.color : "var(--text-muted)" }}>
+                {category.serpChecked
+                  ? category.serpPosition ? `#${category.serpPosition}` : "Fora do Top 30"
+                  : "Não verificado"}
+              </p>
+            </div>
+
+            {/* Other metrics */}
             {[
-              { label: "SERP Real", value: category.serpChecked ? (category.serpPosition ? `#${category.serpPosition}` : "Fora do Top 30") : "Não verificado", icon: Search, accent: category.serpPosition ? cfg.color : "var(--text-muted)" },
-              { label: "GSC Média", value: category.position.toFixed(1), icon: TrendingUp, accent: cfg.color },
+              { label: "GSC Média", value: category.position > 0 ? category.position.toFixed(1) : "—", icon: TrendingUp, accent: cfg.color },
               { label: "Cliques", value: category.clicks.toLocaleString("pt-BR"), icon: MousePointerClick, accent: "var(--text-primary)" },
               { label: "Impressoes", value: category.impressions.toLocaleString("pt-BR"), icon: Eye, accent: "var(--text-primary)" },
               { label: "CTR", value: `${(category.ctr * 100).toFixed(1)}%`, icon: TrendingUp, accent: "var(--text-primary)" },
@@ -1024,6 +1062,8 @@ export default function CategoryMapPage() {
       <DetailDrawer
         category={selectedCategory}
         onClose={() => setSelectedCategory(null)}
+        onCheckSerp={checkSerpPosition}
+        checkingSerpId={checkingSerpId}
       />
     </div>
   );
