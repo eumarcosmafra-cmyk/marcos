@@ -96,104 +96,132 @@ function getDiagnosis(cat: CategoryNode): string {
 }
 
 // ---------------------------------------------------------------------------
-// Treemap component
+// Position Group component
 // ---------------------------------------------------------------------------
 
-function Treemap({
+const POSITION_GROUPS = [
+  { key: "top5", label: "Posição 1–5", subtitle: "Consolidadas", min: 0.1, max: 5, accent: "emerald", highlight: false },
+  { key: "top10", label: "Posição 6–10", subtitle: "Borda do Top 10", min: 5.1, max: 10, accent: "blue", highlight: false },
+  { key: "striking", label: "Posição 11–20", subtitle: "Maior potencial de ganho", min: 10.1, max: 20, accent: "yellow", highlight: true },
+  { key: "deep", label: "Posição 21+", subtitle: "Baixa competitividade", min: 20.1, max: 9999, accent: "red", highlight: false },
+] as const;
+
+function PositionGroupGrid({
+  group,
   categories,
   onSelect,
 }: {
+  group: typeof POSITION_GROUPS[number];
   categories: CategoryNode[];
   onSelect: (c: CategoryNode) => void;
 }) {
-  const maxImpressions = Math.max(...categories.map((c) => c.impressions), 1);
+  if (categories.length === 0) return null;
+
+  const maxImp = Math.max(...categories.map((c) => c.impressions), 1);
+
+  const accentColors: Record<string, { bg: string; border: string; text: string; badge: string }> = {
+    emerald: { bg: "rgba(52, 211, 153, 0.08)", border: "rgba(52, 211, 153, 0.2)", text: "rgb(52, 211, 153)", badge: "bg-emerald-600/15 text-emerald-400" },
+    blue: { bg: "rgba(96, 165, 250, 0.08)", border: "rgba(96, 165, 250, 0.2)", text: "rgb(96, 165, 250)", badge: "bg-blue-600/15 text-blue-400" },
+    yellow: { bg: "rgba(251, 191, 36, 0.08)", border: "rgba(251, 191, 36, 0.25)", text: "rgb(251, 191, 36)", badge: "bg-yellow-600/15 text-yellow-400" },
+    red: { bg: "rgba(248, 113, 113, 0.08)", border: "rgba(248, 113, 113, 0.2)", text: "rgb(248, 113, 113)", badge: "bg-red-600/15 text-red-400" },
+  };
+
+  const ac = accentColors[group.accent];
 
   return (
-    <div className="flex flex-wrap gap-1.5" style={{ minHeight: "320px" }}>
-      {categories.map((cat) => {
-        const relativeSize = Math.max(1, (cat.impressions / maxImpressions) * 100);
-        const cfg = STATUS_CONFIG[cat.status];
+    <div
+      className={cn("rounded-xl p-4 transition-all", group.highlight && "ring-1")}
+      style={{
+        background: group.highlight ? ac.bg : "transparent",
+        borderColor: group.highlight ? ac.border : "transparent",
+        ...(group.highlight ? { ringColor: ac.border } : {}),
+      }}
+    >
+      {/* Group header */}
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-bold" style={{ color: ac.text }}>{group.label}</h3>
+          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>{group.subtitle}</span>
+          {group.highlight && (
+            <span className={cn("rounded-full px-2 py-0.5 text-[9px] font-medium", ac.badge)}>
+              Foco
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>
+          {categories.length} {categories.length === 1 ? "categoria" : "categorias"}
+        </span>
+      </div>
 
-        return (
-          <div
-            key={cat.id}
-            onClick={() => onSelect(cat)}
-            className="group relative flex cursor-pointer flex-col rounded-lg p-3 transition-all hover:scale-[1.02] hover:shadow-lg"
-            style={{
-              flexGrow: relativeSize,
-              flexBasis: `${Math.max(120, relativeSize * 2)}px`,
-              minHeight: `${Math.max(80, relativeSize)}px`,
-              background: cfg.bgBlock,
-              border: `1px solid ${cfg.borderBlock}`,
-            }}
-          >
-            <p
-              className="text-xs font-semibold truncate"
-              style={{ color: "var(--text-primary)" }}
-            >
-              {cat.name}
-            </p>
-            <p
-              className="text-[10px] mt-0.5 truncate"
-              style={{ color: "var(--text-muted)" }}
-            >
-              {cat.topQuery}
-            </p>
-            <div className="mt-auto flex items-end justify-between pt-2">
-              <span className="text-lg font-bold" style={{ color: cfg.color }}>
-                {cat.position.toFixed(1)}
-              </span>
-              <span className="text-[9px]" style={{ color: "var(--text-muted)" }}>
-                {cat.impressions.toLocaleString("pt-BR")} imp
-              </span>
-            </div>
+      {/* Grid */}
+      <div className="flex flex-wrap gap-1.5">
+        {categories.map((cat) => {
+          const relativeSize = Math.max(1, (cat.impressions / maxImp) * 100);
 
-            {/* Hover tooltip */}
+          return (
             <div
-              className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 scale-95 rounded-lg p-3 opacity-0 shadow-xl transition-all group-hover:scale-100 group-hover:opacity-100"
+              key={cat.id}
+              onClick={() => onSelect(cat)}
+              className="group relative flex cursor-pointer flex-col rounded-lg p-3 transition-all hover:scale-[1.02] hover:shadow-lg"
               style={{
-                background: "var(--glass-bg)",
-                border: "1px solid var(--glass-border)",
-                backdropFilter: "blur(12px)",
-                minWidth: "200px",
+                flexGrow: relativeSize,
+                flexBasis: `${Math.max(130, relativeSize * 2)}px`,
+                minHeight: `${Math.max(72, Math.min(relativeSize, 120))}px`,
+                background: ac.bg,
+                border: `1px solid ${ac.border}`,
               }}
             >
-              <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+              <p className="text-xs font-semibold truncate" style={{ color: "var(--text-primary)" }}>
                 {cat.name}
               </p>
-              <div className="mt-1.5 space-y-1">
-                <div className="flex justify-between text-[10px]">
-                  <span style={{ color: "var(--text-muted)" }}>Posicao</span>
-                  <span style={{ color: "var(--text-primary)" }}>{cat.position.toFixed(1)}</span>
-                </div>
-                <div className="flex justify-between text-[10px]">
-                  <span style={{ color: "var(--text-muted)" }}>Impressoes</span>
-                  <span style={{ color: "var(--text-primary)" }}>
-                    {cat.impressions.toLocaleString("pt-BR")}
+              <p className="text-[10px] mt-0.5 truncate" style={{ color: "var(--text-muted)" }}>
+                {cat.topQuery}
+              </p>
+              <div className="mt-auto flex items-end justify-between pt-2">
+                <span className="text-lg font-bold" style={{ color: ac.text }}>
+                  {cat.position > 0 ? cat.position.toFixed(1) : "—"}
+                </span>
+                <div className="text-right">
+                  <span className="block text-[9px]" style={{ color: "var(--text-muted)" }}>
+                    {cat.impressions.toLocaleString("pt-BR")} imp
                   </span>
-                </div>
-                <div className="flex justify-between text-[10px]">
-                  <span style={{ color: "var(--text-muted)" }}>Cliques</span>
-                  <span style={{ color: "var(--text-primary)" }}>
-                    {cat.clicks.toLocaleString("pt-BR")}
-                  </span>
-                </div>
-                <div className="flex justify-between text-[10px]">
-                  <span style={{ color: "var(--text-muted)" }}>CTR</span>
-                  <span style={{ color: "var(--text-primary)" }}>
-                    {(cat.ctr * 100).toFixed(1)}%
+                  <span className="block text-[9px]" style={{ color: "var(--text-muted)" }}>
+                    {cat.clicks.toLocaleString("pt-BR")} cli
                   </span>
                 </div>
               </div>
-              <div className="mt-2">
-                <span className={cn("rounded-full px-2 py-0.5 text-[9px] font-medium", cfg.bg, cfg.text)}>
-                  {cfg.label}
-                </span>
+
+              {/* Hover tooltip */}
+              <div
+                className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 scale-95 rounded-lg p-3 opacity-0 shadow-xl transition-all group-hover:scale-100 group-hover:opacity-100"
+                style={{
+                  background: "var(--glass-bg)",
+                  border: "1px solid var(--glass-border)",
+                  backdropFilter: "blur(12px)",
+                  minWidth: "200px",
+                }}
+              >
+                <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{cat.name}</p>
+                <div className="mt-1.5 space-y-1">
+                  {[
+                    ["Query", cat.topQuery],
+                    ["Posição", cat.position > 0 ? cat.position.toFixed(1) : "—"],
+                    ["Impressões", cat.impressions.toLocaleString("pt-BR")],
+                    ["Cliques", cat.clicks.toLocaleString("pt-BR")],
+                    ["CTR", `${(cat.ctr * 100).toFixed(1)}%`],
+                    ["Score", cat.score.toLocaleString("pt-BR")],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex justify-between text-[10px]">
+                      <span style={{ color: "var(--text-muted)" }}>{label}</span>
+                      <span style={{ color: "var(--text-primary)" }}>{value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -798,19 +826,43 @@ export default function CategoryMapPage() {
           </div>
 
           {/* -------------------------------------------------------------- */}
-          {/* Treemap */}
+          {/* Position Groups */}
           {/* -------------------------------------------------------------- */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-4">
               <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                Mapa de Categorias
+                Mapa por Faixa de Posição
               </h2>
               <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                Tamanho = impressoes | Cor = status
+                Tamanho = impressões | Agrupado por performance
               </span>
             </div>
-            <div className="glass-card p-4">
-              <Treemap categories={categories} onSelect={setSelectedCategory} />
+            <div className="space-y-4">
+              {POSITION_GROUPS.map((group) => {
+                const groupCats = categories
+                  .filter((c) => {
+                    const pos = c.position || 9999;
+                    return pos >= group.min && pos <= group.max;
+                  })
+                  .sort((a, b) => b.score - a.score);
+
+                return (
+                  <PositionGroupGrid
+                    key={group.key}
+                    group={group}
+                    categories={groupCats}
+                    onSelect={setSelectedCategory}
+                  />
+                );
+              })}
+              {/* Categories with no position data */}
+              {categories.some((c) => !c.position || c.position === 0) && (
+                <PositionGroupGrid
+                  group={POSITION_GROUPS[3]}
+                  categories={categories.filter((c) => !c.position || c.position === 0)}
+                  onSelect={setSelectedCategory}
+                />
+              )}
             </div>
           </div>
 
