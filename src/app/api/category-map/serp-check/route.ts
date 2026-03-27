@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
 
     const requestBody = {
       q: query,
+      type: "search",
+      engine: "google",
       gl: "br",
       hl: "pt-br",
       num: 30,
