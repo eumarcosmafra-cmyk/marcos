@@ -16,25 +16,46 @@ interface GscRow {
  * For each URL, find the top query (by clicks, then impressions, then position).
  */
 /**
- * Extract brand name from a GSC site URL or domain.
- * e.g. "sc-domain:epulari.com.br" → "epulari"
- *      "https://www.adove.com.br/" → "adove"
+ * Extract brand names from a GSC site URL or domain.
+ * Returns multiple variations to catch branded queries.
+ * e.g. "sc-domain:useepulari.com.br" → ["useepulari", "epulari"]
+ *      "https://www.adove.com.br/" → ["adove"]
  */
-function extractBrandName(siteUrl: string): string {
+function extractBrandNames(siteUrl: string): string[] {
   const domain = siteUrl
     .replace("sc-domain:", "")
     .replace(/^https?:\/\//, "")
     .replace(/^www\./, "")
     .replace(/\/$/, "");
-  // Take the first part before the TLD
-  return domain.split(".")[0].toLowerCase();
+  const baseName = domain.split(".")[0].toLowerCase();
+
+  const names = [baseName];
+
+  // Common prefixes to strip: use, loja, site, www, shop, store
+  const prefixes = ["use", "loja", "site", "shop", "store", "meu", "my"];
+  for (const prefix of prefixes) {
+    if (baseName.startsWith(prefix) && baseName.length > prefix.length + 2) {
+      names.push(baseName.slice(prefix.length));
+    }
+  }
+
+  return names;
 }
 
 /**
- * Check if a query is branded (contains the brand name).
+ * Check if a query is branded (contains any brand name variation).
  */
-function isBrandedQuery(query: string, brandName: string): boolean {
-  return query.toLowerCase().includes(brandName);
+function isBrandedQuery(query: string, brandNames: string[]): boolean {
+  const lower = query.toLowerCase().trim();
+  return brandNames.some((brand) => {
+    // Exact match (query IS the brand name)
+    if (lower === brand) return true;
+    // Query starts with brand name
+    if (lower.startsWith(brand + " ")) return true;
+    // Query contains brand name as a word
+    if (lower.includes(" " + brand + " ") || lower.includes(" " + brand)) return true;
+    return false;
+  });
 }
 
 /**
@@ -56,7 +77,7 @@ export async function enrichCategoriesWithGSC(
   period = "3m"
 ): Promise<CategoryNode[]> {
   const { startDate, endDate } = getDateRange(period);
-  const brandName = extractBrandName(siteUrl);
+  const brandNames = extractBrandNames(siteUrl);
 
   // Fetch all query+page data
   const rows = await getSearchAnalytics(accessToken, siteUrl, {
@@ -112,23 +133,22 @@ export async function enrichCategoriesWithGSC(
     // For category pages: skip branded queries, use generic category query
     // For homepage: branded queries are OK
     let topRow = matching[0];
-    if (!isHome && brandName) {
-      const nonBranded = matching.filter((r) => !isBrandedQuery(r.keys?.[0] || "", brandName));
+    if (!isHome && brandNames.length > 0) {
+      const nonBranded = matching.filter((r) => !isBrandedQuery(r.keys?.[0] || "", brandNames));
       if (nonBranded.length > 0) {
         topRow = nonBranded[0];
       }
     }
 
     const topQuery = topRow.keys?.[0] || "(desconhecido)";
-    const clicks = topRow.clicks || 0;
-    const impressions = topRow.impressions || 0;
-    const ctr = topRow.ctr || 0;
     const position = topRow.position || 0;
+    const ctr = topRow.ctr || 0;
 
-    // Aggregate total clicks/impressions across all queries for this URL
+    // Aggregate total clicks/impressions across ALL queries for this URL (not just top)
     const totalClicks = matching.reduce((s, r) => s + (r.clicks || 0), 0);
     const totalImpressions = matching.reduce((s, r) => s + (r.impressions || 0), 0);
 
+    // Use position from the top non-branded query for classification
     const status = classifyCategory(position, totalImpressions);
     const priorityScore = calculatePriorityScore(position, totalImpressions);
 
