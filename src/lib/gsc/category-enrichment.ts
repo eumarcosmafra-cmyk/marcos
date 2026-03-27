@@ -200,3 +200,29 @@ export function generateMockCategories(): CategoryNode[] {
     return { ...d, id: `cat-${i}`, status, priorityScore };
   }).sort((a, b) => b.priorityScore - a.priorityScore);
 }
+
+/**
+ * Generate mock product data for demonstration purposes.
+ */
+export function generateMockProducts(): CategoryNode[] {
+  const mockData: Omit<CategoryNode, "id" | "status" | "priorityScore">[] = [
+    { url: "https://www.useepulari.com.br/feminino/saia-calca/saia-calca-fitness", slug: "saia-calca-fitness", name: "Saia Calça Fitness", parentUrl: "https://www.useepulari.com.br/feminino/saia-calca/", depth: 3, clicks: 89, impressions: 3200, ctr: 0.028, position: 4.2, topQuery: "saia calça fitness" },
+    { url: "https://www.useepulari.com.br/feminino/moda-praia/biquini-evangelico", slug: "biquini-evangelico", name: "Biquíni Evangélico", parentUrl: "https://www.useepulari.com.br/feminino/moda-praia/", depth: 3, clicks: 156, impressions: 5800, ctr: 0.027, position: 3.1, topQuery: "biquíni evangélico" },
+    { url: "https://www.useepulari.com.br/feminino/esportes/legging-academia", slug: "legging-academia", name: "Legging Academia", parentUrl: "https://www.useepulari.com.br/feminino/esportes/", depth: 3, clicks: 210, impressions: 8900, ctr: 0.024, position: 6.8, topQuery: "legging academia feminina" },
+    { url: "https://www.useepulari.com.br/feminino/vestidos/vestido-midi", slug: "vestido-midi", name: "Vestido Midi", parentUrl: "https://www.useepulari.com.br/feminino/vestidos/", depth: 3, clicks: 340, impressions: 12000, ctr: 0.028, position: 2.5, topQuery: "vestido midi" },
+    { url: "https://www.useepulari.com.br/feminino/saia-calca/saia-calca-jeans", slug: "saia-calca-jeans", name: "Saia Calça Jeans", parentUrl: "https://www.useepulari.com.br/feminino/saia-calca/", depth: 3, clicks: 45, impressions: 2100, ctr: 0.021, position: 8.9, topQuery: "saia calça jeans" },
+    { url: "https://www.useepulari.com.br/feminino/moda-praia/saida-praia", slug: "saida-praia", name: "Saída de Praia", parentUrl: "https://www.useepulari.com.br/feminino/moda-praia/", depth: 3, clicks: 78, impressions: 4500, ctr: 0.017, position: 11.3, topQuery: "saída de praia" },
+    { url: "https://www.useepulari.com.br/feminino/esportes/short-academia", slug: "short-academia", name: "Short Academia", parentUrl: "https://www.useepulari.com.br/feminino/esportes/", depth: 3, clicks: 120, impressions: 6200, ctr: 0.019, position: 7.4, topQuery: "short academia feminino" },
+    { url: "https://www.useepulari.com.br/feminino/conjuntos/conjunto-fitness", slug: "conjunto-fitness", name: "Conjunto Fitness", parentUrl: "https://www.useepulari.com.br/feminino/conjuntos/", depth: 3, clicks: 95, impressions: 3800, ctr: 0.025, position: 5.6, topQuery: "conjunto fitness feminino" },
+    { url: "https://www.useepulari.com.br/feminino/moda-praia/maio-evangelico", slug: "maio-evangelico", name: "Maiô Evangélico", parentUrl: "https://www.useepulari.com.br/feminino/moda-praia/", depth: 3, clicks: 67, impressions: 2900, ctr: 0.023, position: 9.2, topQuery: "maiô evangélico" },
+    { url: "https://www.useepulari.com.br/feminino/vestidos/vestido-longo", slug: "vestido-longo", name: "Vestido Longo", parentUrl: "https://www.useepulari.com.br/feminino/vestidos/", depth: 3, clicks: 185, impressions: 7500, ctr: 0.025, position: 4.8, topQuery: "vestido longo" },
+    { url: "https://www.useepulari.com.br/feminino/esportes/top-academia", slug: "top-academia", name: "Top Academia", parentUrl: "https://www.useepulari.com.br/feminino/esportes/", depth: 3, clicks: 55, impressions: 3100, ctr: 0.018, position: 14.2, topQuery: "top academia feminino" },
+    { url: "https://www.useepulari.com.br/feminino/saia-calca/saia-calca-curta", slug: "saia-calca-curta", name: "Saia Calça Curta", parentUrl: "https://www.useepulari.com.br/feminino/saia-calca/", depth: 3, clicks: 32, impressions: 1800, ctr: 0.018, position: 18.7, topQuery: "saia calça curta" },
+  ];
+
+  return mockData.map((d, i) => {
+    const status = classifyCategory(d.position, d.impressions);
+    const priorityScore = calculatePriorityScore(d.position, d.impressions);
+    return { ...d, id: `prod-${i}`, status, priorityScore };
+  }).sort((a, b) => b.priorityScore - a.priorityScore);
+}

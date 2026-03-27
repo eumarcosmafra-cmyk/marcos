@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await res.json();
-    const organic = (data.organic || []) as {
+    const rawOrganic = (data.organic || []) as {
       position?: number;
       link?: string;
       domain?: string;
@@ -58,19 +58,34 @@ export async function POST(request: NextRequest) {
       snippet?: string;
     }[];
 
+    // Filter out social media / non-website results
+    const socialDomains = [
+      "instagram.com", "youtube.com", "tiktok.com", "facebook.com",
+      "twitter.com", "x.com", "pinterest.com", "linkedin.com",
+      "reddit.com", "quora.com",
+    ];
+
+    const organic = rawOrganic.filter((r) => {
+      const domain = normalizeDomain(r.link || "");
+      return !socialDomains.some((sd) => domain.includes(sd));
+    });
+
+    // Re-number positions after filtering
+    const renumbered = organic.map((r, i) => ({ ...r, position: i + 1 }));
+
     const targetDomain = normalizeDomain(targetUrl);
     const targetNorm = targetUrl.replace(/\/$/, "").toLowerCase();
 
-    // Build top 10 for display
-    const top10 = organic.slice(0, 10).map((r, i) => ({
-      position: r.position || i + 1,
+    // Build top 10 for display (filtered, only real websites)
+    const top10 = renumbered.slice(0, 10).map((r) => ({
+      position: r.position,
       domain: r.domain || normalizeDomain(r.link || ""),
       title: r.title || "",
       url: r.link || "",
     }));
 
     // Find exact URL match
-    const exactMatch = organic.find((r) => {
+    const exactMatch = renumbered.find((r) => {
       const link = (r.link || "").replace(/\/$/, "").toLowerCase();
       return link === targetNorm;
     });
@@ -86,7 +101,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Domain match — normalize both sides
-    const domainMatch = organic.find((r) => {
+    const domainMatch = renumbered.find((r) => {
       const rDomain = normalizeDomain(r.link || "");
       return rDomain === targetDomain;
     });
@@ -101,8 +116,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Partial domain match (e.g. subdomain, different path)
-    const partialMatch = organic.find((r) => {
+    // Partial domain match
+    const partialMatch = renumbered.find((r) => {
       const rDomain = normalizeDomain(r.link || "");
       return rDomain.includes(targetDomain) || targetDomain.includes(rDomain);
     });

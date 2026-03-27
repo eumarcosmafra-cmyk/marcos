@@ -15,6 +15,7 @@ import {
   Moon,
   Lightbulb,
   Map,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/providers/theme-provider";
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/monitor", label: "Monitor", icon: Shield },
   { href: "/opportunities", label: "Oportunidades", icon: Zap },
   { href: "/category-map", label: "Category Map", icon: Map },
+  { href: "/product-map", label: "Product Map", icon: Package },
   { href: "/settings", label: "Configurações", icon: Settings },
 ];
 

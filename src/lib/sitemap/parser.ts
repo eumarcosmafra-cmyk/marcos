@@ -121,6 +121,46 @@ export function slugToName(slug: string): string {
 /**
  * Determine depth and parent from URL structure.
  */
+/**
+ * Filter URLs to keep only likely product pages.
+ * Product pages typically have deeper paths, specific slugs, or product-like patterns.
+ */
+export function filterProductUrls(urls: SitemapUrl[]): SitemapUrl[] {
+  return urls.filter((u) => {
+    try {
+      const path = new URL(u.loc).pathname;
+
+      // Skip homepage
+      if (path === "/" || path === "") return false;
+
+      // Skip files
+      if (/\.(xml|json|jpg|png|pdf)$/i.test(path)) return false;
+
+      // Skip known non-product patterns
+      if (/\/(blog|post|article|news|tag|author|page|wp-|admin|cart|checkout|account|login|sitemap|politica|termos|faq|contato|sobre)/i.test(path)) return false;
+
+      const segments = path.split("/").filter(Boolean);
+
+      // Products usually have 2+ path segments (category/product)
+      if (segments.length < 2) return false;
+
+      // Product URLs typically have longer slugs with hyphens
+      const lastSegment = segments[segments.length - 1] || "";
+      if (lastSegment.split("-").length >= 2) return true;
+
+      // URLs with numeric IDs are likely products
+      if (/\d{3,}/.test(lastSegment)) return true;
+
+      // Deep URLs (3+ segments) are more likely products
+      if (segments.length >= 3) return true;
+
+      return false;
+    } catch {
+      return false;
+    }
+  });
+}
+
 export function analyzeUrlStructure(url: string): { slug: string; depth: number; parentUrl: string | null } {
   try {
     const parsed = new URL(url);
