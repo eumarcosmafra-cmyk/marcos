@@ -37,6 +37,7 @@ interface CategoryNode {
   ctr: number;
   status: "well_positioned" | "opportunity" | "critical";
   score: number;
+  priorityScore?: number;
 }
 
 interface ApiResponse {
@@ -629,8 +630,17 @@ export default function CategoryMapPage() {
           period,
         }),
       });
-      const data: ApiResponse = await res.json();
-      setCategories(data.categories || []);
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+        setCategories([]);
+        return;
+      }
+      const cats = (data.categories || []).map((c: any) => ({
+        ...c,
+        score: c.score ?? c.priorityScore ?? 0,
+      }));
+      setCategories(cats);
       setLoaded(true);
     } catch {
       setCategories([]);
