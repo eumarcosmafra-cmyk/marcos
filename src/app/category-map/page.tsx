@@ -223,7 +223,7 @@ function PositionGroupGrid({
                       {cat.clicks.toLocaleString("pt-BR")} cli
                     </span>
                   </div>
-                  {onCheckSerp && !cat.serpChecked && cat.name && (
+                  {onCheckSerp && !cat.serpChecked && cat.topQuery && !cat.topQuery.startsWith("(") && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onCheckSerp(cat); }}
                       disabled={checkingSerpId === cat.id}
@@ -361,7 +361,7 @@ function DetailDrawer({
                 !category.serpChecked && onCheckSerp && "cursor-pointer hover:bg-[var(--glass-hover)] transition-colors"
               )}
               onClick={() => {
-                if (!category.serpChecked && onCheckSerp && category.name) {
+                if (!category.serpChecked && onCheckSerp && category.topQuery && !category.topQuery.startsWith("(")) {
                   onCheckSerp(category);
                 }
               }}
@@ -371,7 +371,7 @@ function DetailDrawer({
                   <Search className="h-3 w-3" style={{ color: "var(--text-muted)" }} />
                   <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>SERP Real</span>
                 </div>
-                {!category.serpChecked && onCheckSerp && category.name && (
+                {!category.serpChecked && onCheckSerp && category.topQuery && !category.topQuery.startsWith("(") && (
                   <span className="rounded bg-brand-600 px-2 py-0.5 text-[9px] font-medium text-white">
                     {checkingSerpId === category.id ? (
                       <Loader2 className="inline h-2.5 w-2.5 animate-spin" />
@@ -413,7 +413,7 @@ function DetailDrawer({
           {category.serpChecked && category.serpTop10 && category.serpTop10.length > 0 && (
             <div>
               <p className="mb-2 text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-                SERP Real — &quot;{category.name.toLowerCase()}&quot;
+                SERP Real — &quot;{category.topQuery}&quot;
               </p>
               <div className="space-y-1">
                 {category.serpTop10.map((r) => {
@@ -691,7 +691,7 @@ function StrategicTable({
                             {cat.position.toFixed(1)}
                           </span>
                         )}
-                        {onCheckSerp && !cat.serpChecked && cat.name && (
+                        {onCheckSerp && !cat.serpChecked && cat.topQuery && !cat.topQuery.startsWith("(") && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onCheckSerp(cat); }}
                             disabled={checkingSerpId === cat.id}
@@ -809,16 +809,14 @@ export default function CategoryMapPage() {
 
   // Check real SERP position for a category
   async function checkSerpPosition(cat: CategoryNode) {
-    if (!cat.name) return;
+    if (!cat.topQuery || cat.topQuery.startsWith("(")) return;
     setCheckingSerpId(cat.id);
     try {
-      // Use category NAME (slug) for SERP search, not the GSC top query
-      // e.g. "Saia Calça" instead of "short saia academia"
-      const serpQuery = cat.name.toLowerCase();
+      // Use the GSC top query — this is the query that actually drives traffic
       const res = await fetch("/api/category-map/serp-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: serpQuery, targetUrl: cat.url }),
+        body: JSON.stringify({ query: cat.topQuery, targetUrl: cat.url }),
       });
       const data = await res.json();
       const update = {
