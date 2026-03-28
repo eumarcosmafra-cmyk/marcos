@@ -19,6 +19,8 @@ import {
   ArrowUpDown,
   MousePointerClick,
   Eye,
+  Link2,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GSCSiteSelector } from "@/components/gsc/gsc-site-selector";
@@ -27,68 +29,73 @@ import { GSCSiteSelector } from "@/components/gsc/gsc-site-selector";
 // Types
 // ---------------------------------------------------------------------------
 
-interface ClusterUrl {
-  url: string;
-  title: string;
-  tipo_intencao: string;
+interface ClusterLayer {
+  category_url: string | null;
+  pillar_url: string | null;
+  pillar_status: "exists" | "missing" | "weak";
+  satellite_urls: string[];
+  missing_satellites: string[];
 }
 
 interface Cluster {
   nome_cluster: string;
+  cluster_type: "broad_pillar" | "medium" | "long_tail" | "seasonal";
   entidade_principal: string;
-  score: "forte" | "medio" | "fraco";
-  total_urls: number;
-  urls: ClusterUrl[];
-  metricas: { impressoes: number; cliques: number; ctr_medio: number };
-  cobertura: { atual: number; ideal: number; gap: number };
-  diagnostico: string;
-  oportunidades: string[];
+  satellite_target: number;
+  layers: ClusterLayer;
+  score: "strong" | "medium" | "weak_real" | "no_data" | "critical_gap";
+  score_reasoning: string;
+  geo_score: "high" | "medium" | "low";
+  geo_recommendation: string;
+  gsc_impressions: number;
+  gsc_clicks: number;
+  internal_links_to_category: boolean;
+  merge_candidates: string[];
+  // Computed fields (added post-AI)
+  opportunity_score?: number;
+  merged_from?: string[];
+  urls?: { url: string; title: string; tipo_intencao: string }[];
+  cobertura?: { atual: number; ideal: number; gap: number };
+  diagnostico?: string;
+  oportunidades?: string[];
+  metricas?: { impressoes: number; cliques: number; ctr_medio: number };
+  // Legacy compatibility
+  total_urls?: number;
 }
 
 interface Analysis {
   clusters: Cluster[];
-  priorizacao: { cluster: string; motivo: string }[];
+  to_validate: Cluster[];
+  priority_queue: { cluster: string; reason: string; action: string }[];
+  executive_summary: string;
   resumo: {
     total_urls: number;
     total_clusters: number;
-    clusters_fortes: number;
-    clusters_medios: number;
-    clusters_fracos: number;
+    critical_gaps: number;
+    overall_geo: string;
   };
 }
 
 // ---------------------------------------------------------------------------
-// Score config
+// Score config (5-state)
 // ---------------------------------------------------------------------------
 
 const SCORE_CONFIG = {
-  forte: {
-    label: "Forte",
-    bg: "bg-emerald-600/15",
-    text: "text-emerald-400",
-    color: "rgb(52, 211, 153)",
-    bgBlock: "rgba(52, 211, 153, 0.12)",
-    borderBlock: "rgba(52, 211, 153, 0.25)",
-    borderLeft: "rgb(52, 211, 153)",
-  },
-  medio: {
-    label: "Medio",
-    bg: "bg-yellow-600/15",
-    text: "text-yellow-400",
-    color: "rgb(251, 191, 36)",
-    bgBlock: "rgba(251, 191, 36, 0.12)",
-    borderBlock: "rgba(251, 191, 36, 0.25)",
-    borderLeft: "rgb(251, 191, 36)",
-  },
-  fraco: {
-    label: "Fraco",
-    bg: "bg-red-600/15",
-    text: "text-red-400",
-    color: "rgb(248, 113, 113)",
-    bgBlock: "rgba(248, 113, 113, 0.12)",
-    borderBlock: "rgba(248, 113, 113, 0.25)",
-    borderLeft: "rgb(248, 113, 113)",
-  },
+  strong: { label: "Forte", bg: "bg-emerald-600/15", text: "text-emerald-400", color: "rgb(52, 211, 153)", bgBlock: "rgba(52, 211, 153, 0.12)", borderBlock: "rgba(52, 211, 153, 0.25)", borderLeft: "rgb(52, 211, 153)" },
+  medium: { label: "Medio", bg: "bg-yellow-600/15", text: "text-yellow-400", color: "rgb(251, 191, 36)", bgBlock: "rgba(251, 191, 36, 0.12)", borderBlock: "rgba(251, 191, 36, 0.25)", borderLeft: "rgb(251, 191, 36)" },
+  weak_real: { label: "Fraco", bg: "bg-red-600/15", text: "text-red-400", color: "rgb(248, 113, 113)", bgBlock: "rgba(248, 113, 113, 0.12)", borderBlock: "rgba(248, 113, 113, 0.25)", borderLeft: "rgb(248, 113, 113)" },
+  no_data: { label: "Sem dados", bg: "bg-gray-600/15", text: "text-gray-400", color: "rgb(156, 163, 175)", bgBlock: "rgba(156, 163, 175, 0.12)", borderBlock: "rgba(156, 163, 175, 0.25)", borderLeft: "rgb(156, 163, 175)" },
+  critical_gap: { label: "Gap critico", bg: "bg-purple-600/15", text: "text-purple-400", color: "rgb(192, 132, 252)", bgBlock: "rgba(192, 132, 252, 0.12)", borderBlock: "rgba(192, 132, 252, 0.25)", borderLeft: "rgb(192, 132, 252)" },
+  // Legacy fallbacks
+  forte: { label: "Forte", bg: "bg-emerald-600/15", text: "text-emerald-400", color: "rgb(52, 211, 153)", bgBlock: "rgba(52, 211, 153, 0.12)", borderBlock: "rgba(52, 211, 153, 0.25)", borderLeft: "rgb(52, 211, 153)" },
+  medio: { label: "Medio", bg: "bg-yellow-600/15", text: "text-yellow-400", color: "rgb(251, 191, 36)", bgBlock: "rgba(251, 191, 36, 0.12)", borderBlock: "rgba(251, 191, 36, 0.25)", borderLeft: "rgb(251, 191, 36)" },
+  fraco: { label: "Fraco", bg: "bg-red-600/15", text: "text-red-400", color: "rgb(248, 113, 113)", bgBlock: "rgba(248, 113, 113, 0.12)", borderBlock: "rgba(248, 113, 113, 0.25)", borderLeft: "rgb(248, 113, 113)" },
+} as const;
+
+const GEO_CONFIG = {
+  high: { label: "Alto", bg: "bg-emerald-600/15", text: "text-emerald-400" },
+  medium: { label: "Medio", bg: "bg-yellow-600/15", text: "text-yellow-400" },
+  low: { label: "Baixo", bg: "bg-red-600/15", text: "text-red-400" },
 } as const;
 
 const INTENTION_CONFIG: Record<string, { bg: string; text: string }> = {
@@ -97,6 +104,12 @@ const INTENTION_CONFIG: Record<string, { bg: string; text: string }> = {
   transacional: { bg: "bg-emerald-600/15", text: "text-emerald-400" },
   navegacional: { bg: "bg-gray-600/15", text: "text-gray-400" },
 };
+
+const PILLAR_STATUS_CONFIG = {
+  exists: { label: "Existe", bg: "bg-emerald-600/15", text: "text-emerald-400" },
+  missing: { label: "Faltando", bg: "bg-red-600/15", text: "text-red-400" },
+  weak: { label: "Fraco", bg: "bg-yellow-600/15", text: "text-yellow-400" },
+} as const;
 
 // ---------------------------------------------------------------------------
 // KPI Card
@@ -109,7 +122,7 @@ function KpiCard({
   accent,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   icon: React.ElementType;
   accent?: string;
 }) {
@@ -122,7 +135,7 @@ function KpiCard({
         </span>
       </div>
       <p className="mt-2 text-2xl font-bold" style={{ color: accent ?? "var(--text-primary)" }}>
-        {value.toLocaleString("pt-BR")}
+        {typeof value === "number" ? value.toLocaleString("pt-BR") : value}
       </p>
     </div>
   );
@@ -142,11 +155,11 @@ function IntentionBadge({ tipo }: { tipo: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Score Badge
+// Score Badge (5-state)
 // ---------------------------------------------------------------------------
 
-function ScoreBadge({ score }: { score: "forte" | "medio" | "fraco" }) {
-  const cfg = SCORE_CONFIG[score];
+function ScoreBadge({ score }: { score: string }) {
+  const cfg = SCORE_CONFIG[score as keyof typeof SCORE_CONFIG] ?? SCORE_CONFIG.no_data;
   return (
     <span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-semibold", cfg.bg, cfg.text)}>
       {cfg.label}
@@ -192,113 +205,224 @@ function CoverageBar({ atual, ideal, gap }: { atual: number; ideal: number; gap:
 }
 
 // ---------------------------------------------------------------------------
-// Cluster Card
+// Cluster Card (collapsed by default, expandable)
 // ---------------------------------------------------------------------------
 
-function ClusterCard({
-  cluster,
-  onOpenDrawer,
-}: {
-  cluster: Cluster;
-  onOpenDrawer: (c: Cluster) => void;
-}) {
+function ClusterCard({ cluster }: { cluster: Cluster }) {
   const [expanded, setExpanded] = useState(false);
-  const cfg = SCORE_CONFIG[cluster.score];
+  const cfg = SCORE_CONFIG[cluster.score as keyof typeof SCORE_CONFIG] ?? SCORE_CONFIG.no_data;
+
+  const satelliteCount = cluster.layers?.satellite_urls?.length ?? cluster.cobertura?.atual ?? 0;
+  const target = cluster.satellite_target ?? cluster.cobertura?.ideal ?? 5;
+  const coverageAtual = cluster.cobertura?.atual ?? satelliteCount;
+  const coverageIdeal = cluster.cobertura?.ideal ?? target;
+  const coverageGap = cluster.cobertura?.gap ?? Math.max(0, coverageIdeal - coverageAtual);
+  const impressions = cluster.gsc_impressions ?? cluster.metricas?.impressoes ?? 0;
 
   return (
     <div
       className="glass-card overflow-hidden transition-all"
       style={{ borderLeft: `3px solid ${cfg.borderLeft}` }}
     >
-      {/* Header */}
+      {/* Collapsed header */}
       <div
         className="flex items-center justify-between p-4 cursor-pointer"
         onClick={() => setExpanded((v) => !v)}
       >
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           {expanded ? (
             <ChevronDown className="h-4 w-4 flex-shrink-0" style={{ color: "var(--text-muted)" }} />
           ) : (
             <ChevronRight className="h-4 w-4 flex-shrink-0" style={{ color: "var(--text-muted)" }} />
           )}
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>
                 {cluster.nome_cluster}
               </h3>
-              <span className="rounded-full bg-brand-600/15 px-2 py-0.5 text-[10px] font-medium text-brand-400">
-                {cluster.entidade_principal}
-              </span>
               <ScoreBadge score={cluster.score} />
             </div>
             <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-              {cluster.total_urls} URLs | {cluster.metricas.impressoes.toLocaleString("pt-BR")} impressoes | {cluster.metricas.cliques.toLocaleString("pt-BR")} cliques
+              {impressions.toLocaleString("pt-BR")} impressoes | {coverageAtual}/{coverageIdeal} URLs
             </p>
           </div>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenDrawer(cluster);
-          }}
-          className="ml-3 flex-shrink-0 rounded-lg px-3 py-1.5 text-[10px] font-medium transition-colors hover:bg-[var(--glass-hover)]"
-          style={{ color: "var(--text-muted)", border: "1px solid var(--glass-border)" }}
-        >
-          Detalhes
-        </button>
+
+        {/* Coverage mini-bar */}
+        <div className="flex items-center gap-3 ml-3">
+          <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--glass-border)" }}>
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${coverageIdeal > 0 ? Math.min((coverageAtual / coverageIdeal) * 100, 100) : 0}%`,
+                background: cfg.borderLeft,
+              }}
+            />
+          </div>
+          {cluster.cluster_type && (
+            <span className="rounded-full bg-brand-600/15 px-2 py-0.5 text-[9px] font-medium text-brand-400 shrink-0">
+              {cluster.cluster_type.replace("_", " ")}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Expandable body */}
+      {/* Expanded body */}
       {expanded && (
         <div className="px-4 pb-4 space-y-4" style={{ borderTop: "1px solid var(--glass-border)" }}>
-          {/* Metrics row */}
-          <div className="grid grid-cols-3 gap-3 pt-4">
-            {[
-              { label: "Impressoes", value: cluster.metricas.impressoes.toLocaleString("pt-BR"), icon: Eye },
-              { label: "Cliques", value: cluster.metricas.cliques.toLocaleString("pt-BR"), icon: MousePointerClick },
-              { label: "CTR Medio", value: `${(cluster.metricas.ctr_medio * 100).toFixed(1)}%`, icon: TrendingUp },
-            ].map((m) => (
-              <div key={m.label} className="glass-card p-3">
-                <div className="flex items-center gap-1.5">
-                  <m.icon className="h-3 w-3" style={{ color: "var(--text-muted)" }} />
-                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>{m.label}</span>
-                </div>
-                <p className="mt-1 text-sm font-bold" style={{ color: "var(--text-primary)" }}>{m.value}</p>
+          {/* Layers section */}
+          {cluster.layers && (
+            <div className="pt-4 space-y-3">
+              <p className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                Estrutura do Cluster
+              </p>
+
+              {/* Category */}
+              <div className="flex items-center gap-2 text-xs">
+                <Link2 className="h-3 w-3 flex-shrink-0" style={{ color: "var(--text-muted)" }} />
+                <span style={{ color: "var(--text-muted)" }}>Categoria:</span>
+                {cluster.layers.category_url ? (
+                  <a href={cluster.layers.category_url} target="_blank" rel="noopener noreferrer"
+                    className="truncate hover:underline" style={{ color: "var(--text-primary)" }}>
+                    {cluster.layers.category_url}
+                  </a>
+                ) : (
+                  <span style={{ color: "var(--text-muted)" }}>Nao identificada</span>
+                )}
               </div>
-            ))}
-          </div>
+
+              {/* Pillar */}
+              <div className="flex items-center gap-2 text-xs">
+                <FileText className="h-3 w-3 flex-shrink-0" style={{ color: "var(--text-muted)" }} />
+                <span style={{ color: "var(--text-muted)" }}>Pillar:</span>
+                {cluster.layers.pillar_url ? (
+                  <a href={cluster.layers.pillar_url} target="_blank" rel="noopener noreferrer"
+                    className="truncate hover:underline" style={{ color: "var(--text-primary)" }}>
+                    {cluster.layers.pillar_url}
+                  </a>
+                ) : (
+                  <span className="text-red-400 text-[10px] font-medium">Criar pillar</span>
+                )}
+                {cluster.layers.pillar_status && (
+                  <span className={cn("rounded-full px-2 py-0.5 text-[9px] font-medium",
+                    PILLAR_STATUS_CONFIG[cluster.layers.pillar_status]?.bg ?? "bg-gray-600/15",
+                    PILLAR_STATUS_CONFIG[cluster.layers.pillar_status]?.text ?? "text-gray-400"
+                  )}>
+                    {PILLAR_STATUS_CONFIG[cluster.layers.pillar_status]?.label ?? cluster.layers.pillar_status}
+                  </span>
+                )}
+              </div>
+
+              {/* Existing satellites */}
+              {cluster.layers.satellite_urls?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
+                    Satellites existentes ({cluster.layers.satellite_urls.length})
+                  </p>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {cluster.layers.satellite_urls.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                        className="block text-[10px] truncate rounded-lg px-2 py-1 hover:underline"
+                        style={{ color: "var(--text-secondary)", background: "var(--glass-bg)", border: "1px solid var(--glass-border)" }}>
+                        {url}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Missing satellites */}
+              {cluster.layers.missing_satellites?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-medium mb-1.5" style={{ color: "rgb(248, 113, 113)" }}>
+                    Satellites sugeridos ({cluster.layers.missing_satellites.length})
+                  </p>
+                  <div className="space-y-1">
+                    {cluster.layers.missing_satellites.map((title, i) => (
+                      <div key={i}
+                        className="flex items-center gap-2 text-[10px] rounded-lg px-2 py-1"
+                        style={{ color: "var(--text-secondary)", background: "rgba(248, 113, 113, 0.06)", border: "1px solid rgba(248, 113, 113, 0.15)" }}>
+                        <Target className="h-3 w-3 flex-shrink-0" style={{ color: "rgb(248, 113, 113)" }} />
+                        {title}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Coverage bar */}
-          <CoverageBar atual={cluster.cobertura.atual} ideal={cluster.cobertura.ideal} gap={cluster.cobertura.gap} />
+          <CoverageBar atual={coverageAtual} ideal={coverageIdeal} gap={coverageGap} />
 
-          {/* URLs list */}
-          <div>
-            <p className="text-[10px] font-medium uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
-              URLs ({cluster.urls.length})
-            </p>
-            <div className="space-y-1.5 max-h-60 overflow-y-auto">
-              {cluster.urls.map((u, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between rounded-lg p-2"
-                  style={{ background: "var(--glass-bg)", border: "1px solid var(--glass-border)" }}
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>
-                      {u.title || u.url}
-                    </p>
-                    <p className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>
-                      {u.url}
-                    </p>
-                  </div>
-                  <IntentionBadge tipo={u.tipo_intencao} />
-                </div>
-              ))}
+          {/* GEO section */}
+          {cluster.geo_score && (
+            <div className="glass-card p-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <Sparkles className="h-3 w-3" style={{ color: "var(--text-muted)" }} />
+                <span className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                  GEO Score
+                </span>
+                <span className={cn("rounded-full px-2 py-0.5 text-[9px] font-medium",
+                  GEO_CONFIG[cluster.geo_score]?.bg ?? "bg-gray-600/15",
+                  GEO_CONFIG[cluster.geo_score]?.text ?? "text-gray-400"
+                )}>
+                  {GEO_CONFIG[cluster.geo_score]?.label ?? cluster.geo_score}
+                </span>
+              </div>
+              {cluster.geo_recommendation && (
+                <p className="text-[10px] leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                  {cluster.geo_recommendation}
+                </p>
+              )}
             </div>
-          </div>
+          )}
 
-          {/* Opportunities */}
-          {cluster.oportunidades.length > 0 && (
+          {/* Score reasoning */}
+          {cluster.score_reasoning && (
+            <div
+              className="rounded-lg p-3"
+              style={{ background: cfg.bgBlock, border: `1px solid ${cfg.borderBlock}` }}
+            >
+              <p className="text-[10px] font-medium uppercase tracking-wider mb-1" style={{ color: cfg.color }}>
+                Diagnostico
+              </p>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                {cluster.score_reasoning}
+              </p>
+            </div>
+          )}
+
+          {/* Legacy: URLs list */}
+          {cluster.urls && cluster.urls.length > 0 && (
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
+                URLs ({cluster.urls.length})
+              </p>
+              <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                {cluster.urls.map((u, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between rounded-lg p-2"
+                    style={{ background: "var(--glass-bg)", border: "1px solid var(--glass-border)" }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                        {u.title || u.url}
+                      </p>
+                      <p className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>
+                        {u.url}
+                      </p>
+                    </div>
+                    <IntentionBadge tipo={u.tipo_intencao} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Legacy: Opportunities */}
+          {cluster.oportunidades && cluster.oportunidades.length > 0 && (
             <div>
               <p className="text-[10px] font-medium uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
                 Oportunidades
@@ -314,221 +438,14 @@ function ClusterCard({
             </div>
           )}
 
-          {/* Diagnostic */}
-          <div
-            className="rounded-lg p-3"
-            style={{ background: cfg.bgBlock, border: `1px solid ${cfg.borderBlock}` }}
-          >
-            <p className="text-[10px] font-medium uppercase tracking-wider mb-1" style={{ color: cfg.color }}>
-              Diagnostico
+          {/* Merged from */}
+          {cluster.merged_from && cluster.merged_from.length > 0 && (
+            <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+              Merge de: {cluster.merged_from.join(", ")}
             </p>
-            <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-              {cluster.diagnostico}
-            </p>
-          </div>
+          )}
         </div>
       )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Detail Drawer
-// ---------------------------------------------------------------------------
-
-function DetailDrawer({
-  cluster,
-  onClose,
-}: {
-  cluster: Cluster | null;
-  onClose: () => void;
-}) {
-  if (!cluster) return null;
-  const cfg = SCORE_CONFIG[cluster.score];
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
-
-      {/* Drawer */}
-      <div
-        className="fixed right-0 top-0 z-50 flex h-full w-[480px] flex-col overflow-y-auto"
-        style={{
-          background: "var(--glass-bg)",
-          borderLeft: "1px solid var(--glass-border)",
-          backdropFilter: "blur(20px)",
-        }}
-      >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-6 py-5"
-          style={{ borderBottom: "1px solid var(--glass-border)" }}
-        >
-          <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>
-              {cluster.nome_cluster}
-            </h3>
-            <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-              {cluster.entidade_principal} | {cluster.total_urls} URLs
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="ml-3 rounded-lg p-1.5 transition-colors hover:bg-[var(--glass-hover)]"
-          >
-            <X className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 space-y-5 px-6 py-5">
-          {/* Score & Entity */}
-          <div className="flex items-center gap-3">
-            <ScoreBadge score={cluster.score} />
-            <span className="rounded-full bg-brand-600/15 px-3 py-1 text-xs font-medium text-brand-400">
-              {cluster.entidade_principal}
-            </span>
-          </div>
-
-          {/* Metrics */}
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "Impressoes", value: cluster.metricas.impressoes.toLocaleString("pt-BR"), icon: Eye, accent: "var(--text-primary)" },
-              { label: "Cliques", value: cluster.metricas.cliques.toLocaleString("pt-BR"), icon: MousePointerClick, accent: "var(--text-primary)" },
-              { label: "CTR Medio", value: `${(cluster.metricas.ctr_medio * 100).toFixed(1)}%`, icon: TrendingUp, accent: "var(--text-primary)" },
-              { label: "Total URLs", value: cluster.total_urls.toString(), icon: FileText, accent: cfg.color },
-            ].map((m) => (
-              <div key={m.label} className="glass-card p-3">
-                <div className="flex items-center gap-1.5">
-                  <m.icon className="h-3 w-3" style={{ color: "var(--text-muted)" }} />
-                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>{m.label}</span>
-                </div>
-                <p className="mt-1 text-lg font-bold" style={{ color: m.accent }}>{m.value}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Coverage */}
-          <div className="glass-card p-4">
-            <p className="text-[10px] font-medium uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
-              Cobertura de Conteudo
-            </p>
-            <CoverageBar atual={cluster.cobertura.atual} ideal={cluster.cobertura.ideal} gap={cluster.cobertura.gap} />
-          </div>
-
-          {/* Diagnostic */}
-          <div
-            className="rounded-lg p-4"
-            style={{ background: cfg.bgBlock, border: `1px solid ${cfg.borderBlock}` }}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              {cluster.score === "forte" ? (
-                <CheckCircle2 className="h-4 w-4" style={{ color: cfg.color }} />
-              ) : (
-                <AlertTriangle className="h-4 w-4" style={{ color: cfg.color }} />
-              )}
-              <span className="text-xs font-semibold" style={{ color: cfg.color }}>
-                Diagnostico
-              </span>
-            </div>
-            <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-              {cluster.diagnostico}
-            </p>
-          </div>
-
-          {/* Opportunities */}
-          {cluster.oportunidades.length > 0 && (
-            <div className="glass-card p-4">
-              <p className="text-[10px] font-medium uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
-                Oportunidades de Conteudo
-              </p>
-              <ul className="space-y-2">
-                {cluster.oportunidades.map((op, i) => (
-                  <li key={i} className="flex items-start gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
-                    <Target className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: cfg.color }} />
-                    {op}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* URLs */}
-          <div className="glass-card p-4">
-            <p className="text-[10px] font-medium uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
-              URLs do Cluster ({cluster.urls.length})
-            </p>
-            <div className="space-y-2">
-              {cluster.urls.map((u, i) => (
-                <div
-                  key={i}
-                  className="rounded-lg p-3"
-                  style={{ background: "var(--glass-bg)", border: "1px solid var(--glass-border)" }}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>
-                      {u.title || u.url}
-                    </p>
-                    <IntentionBadge tipo={u.tipo_intencao} />
-                  </div>
-                  <a
-                    href={u.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[10px] mt-1 block truncate hover:underline"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {u.url}
-                  </a>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Priority List
-// ---------------------------------------------------------------------------
-
-function PriorityList({ items }: { items: { cluster: string; motivo: string }[] }) {
-  return (
-    <div className="space-y-2">
-      {items.map((item, i) => {
-        const borderColor =
-          i < items.length * 0.33
-            ? "rgb(248, 113, 113)"
-            : i < items.length * 0.66
-            ? "rgb(251, 191, 36)"
-            : "rgb(52, 211, 153)";
-
-        return (
-          <div
-            key={i}
-            className="glass-card flex items-start gap-3 p-3"
-            style={{ borderLeft: `3px solid ${borderColor}` }}
-          >
-            <span
-              className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
-              style={{ background: `${borderColor}20`, color: borderColor }}
-            >
-              {i + 1}
-            </span>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
-                {item.cluster}
-              </p>
-              <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                {item.motivo}
-              </p>
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -545,16 +462,13 @@ export default function ContentIntelligencePage() {
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [drawerCluster, setDrawerCluster] = useState<Cluster | null>(null);
-  const [sortOrder, setSortOrder] = useState<"worst" | "best">("worst");
+  const [validateExpanded, setValidateExpanded] = useState(false);
 
-  // Sort clusters
+  // Sort clusters by opportunity_score desc (already sorted by API, but keep stable)
   const sortedClusters = useMemo(() => {
     if (!analysis) return [];
-    const scoreRank = { fraco: 0, medio: 1, forte: 2 };
-    const sorted = [...analysis.clusters].sort((a, b) => scoreRank[a.score] - scoreRank[b.score]);
-    return sortOrder === "worst" ? sorted : sorted.reverse();
-  }, [analysis, sortOrder]);
+    return [...analysis.clusters].sort((a, b) => (b.opportunity_score ?? 0) - (a.opportunity_score ?? 0));
+  }, [analysis]);
 
   async function apiCall(body: Record<string, unknown>) {
     const res = await fetch("/api/content-intelligence", {
@@ -603,7 +517,7 @@ export default function ContentIntelligencePage() {
       }
 
       // Step 3: Merge and generate final analysis
-      setProgress("Gerando diagnóstico final com IA...");
+      setProgress("Gerando diagnostico final com IA...");
       const mergeResult = await apiCall({
         step: "merge",
         batchData: { classifications: allClassifications },
@@ -611,6 +525,33 @@ export default function ContentIntelligencePage() {
 
       const result = mergeResult.analysis as Analysis;
       if (!result || !result.clusters) throw new Error("Resposta da IA incompleta");
+
+      // Normalize for backward compat: ensure to_validate, priority_queue, resumo exist
+      if (!result.to_validate) result.to_validate = [];
+      if (!result.priority_queue) {
+        // Legacy: convert priorizacao if it exists
+        const legacy = result as any;
+        if (legacy.priorizacao) {
+          result.priority_queue = legacy.priorizacao.map((p: any) => ({
+            cluster: p.cluster,
+            reason: p.motivo || p.reason || "",
+            action: p.action || "Expandir",
+          }));
+        } else {
+          result.priority_queue = [];
+        }
+      }
+      if (!result.executive_summary) result.executive_summary = "";
+      if (!result.resumo) {
+        const legacy = result as any;
+        result.resumo = {
+          total_urls: legacy.resumo?.total_urls ?? result.clusters.length,
+          total_clusters: legacy.resumo?.total_clusters ?? result.clusters.length,
+          critical_gaps: legacy.resumo?.critical_gaps ?? 0,
+          overall_geo: legacy.resumo?.overall_geo ?? "medium",
+        };
+      }
+
       setAnalysis(result);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
@@ -714,7 +655,7 @@ export default function ContentIntelligencePage() {
           <div className="glass-card flex flex-col items-center justify-center p-12">
             <Loader2 className="h-10 w-10 animate-spin mb-4" style={{ color: "var(--brand-primary)" }} />
             <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-              {progress || "Analisando conteúdo com IA..."}
+              {progress || "Analisando conteudo com IA..."}
             </p>
             <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>
               Processamento em lotes — cada lote leva ~15 segundos
@@ -741,57 +682,96 @@ export default function ContentIntelligencePage() {
         {/* ---- Results ---- */}
         {analysis && !loading && (
           <>
-            {/* Section A: KPI Summary Cards */}
-            <div>
-              <h2 className="text-sm font-bold mb-3" style={{ color: "var(--text-primary)" }}>
-                Resumo da Analise
-              </h2>
-              <div className="grid grid-cols-5 gap-3">
-                <KpiCard label="Total URLs" value={analysis.resumo.total_urls} icon={FileText} />
-                <KpiCard label="Clusters" value={analysis.resumo.total_clusters} icon={Layers} />
-                <KpiCard label="Clusters Fortes" value={analysis.resumo.clusters_fortes} icon={CheckCircle2} accent="rgb(52, 211, 153)" />
-                <KpiCard label="Clusters Medios" value={analysis.resumo.clusters_medios} icon={Zap} accent="rgb(251, 191, 36)" />
-                <KpiCard label="Clusters Fracos" value={analysis.resumo.clusters_fracos} icon={AlertTriangle} accent="rgb(248, 113, 113)" />
+            {/* Zone 1: Executive Summary */}
+            <div className="space-y-4">
+              {/* 4 metric cards */}
+              <div className="grid grid-cols-4 gap-3">
+                <KpiCard icon={FileText} label="URLs Analisadas" value={analysis.resumo.total_urls} accent="text-brand-400" />
+                <KpiCard icon={Layers} label="Clusters Reais" value={analysis.resumo.total_clusters} accent="text-brand-400" />
+                <KpiCard icon={AlertTriangle} label="Gaps Criticos" value={analysis.resumo.critical_gaps} accent="text-red-400" />
+                <KpiCard icon={Zap} label="GEO Score" value={analysis.resumo.overall_geo} accent="text-emerald-400" />
               </div>
+
+              {/* AI diagnosis */}
+              {analysis.executive_summary && (
+                <div className="glass-card p-4">
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                    {analysis.executive_summary}
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* Section B: Priorizacao */}
-            {analysis.priorizacao.length > 0 && (
+            {/* Zone 2: Priority Queue */}
+            {analysis.priority_queue.length > 0 && (
               <div>
-                <h2 className="text-sm font-bold mb-3" style={{ color: "var(--text-primary)" }}>
-                  Priorizacao de Clusters
+                <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
+                  Acoes Prioritarias
                 </h2>
-                <PriorityList items={analysis.priorizacao} />
+                <div className="space-y-2">
+                  {analysis.priority_queue.slice(0, 5).map((item, i) => (
+                    <div key={i} className="glass-card flex items-center gap-4 p-3"
+                      style={{ borderLeft: `3px solid ${i < 2 ? 'rgb(248,113,113)' : i < 4 ? 'rgb(251,191,36)' : 'rgb(52,211,153)'}` }}>
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold"
+                        style={{ color: "var(--text-primary)" }}>{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{item.cluster}</p>
+                        <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{item.reason}</p>
+                      </div>
+                      <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[9px] font-medium",
+                        item.action.includes("Criar") ? "bg-red-600/15 text-red-400" :
+                        item.action.includes("GEO") ? "bg-purple-600/15 text-purple-400" :
+                        item.action.includes("link") ? "bg-yellow-600/15 text-yellow-400" :
+                        "bg-blue-600/15 text-blue-400"
+                      )}>{item.action}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* Section C: Clusters Detail */}
+            {/* Zone 3: Cluster List */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                  Detalhamento dos Clusters ({sortedClusters.length})
+                  Clusters ({sortedClusters.length})
                 </h2>
-                <button
-                  onClick={() => setSortOrder((o) => (o === "worst" ? "best" : "worst"))}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] font-medium transition-colors hover:bg-[var(--glass-hover)]"
-                  style={{ color: "var(--text-muted)", border: "1px solid var(--glass-border)" }}
-                >
-                  <ArrowUpDown className="h-3 w-3" />
-                  {sortOrder === "worst" ? "Piores primeiro" : "Melhores primeiro"}
-                </button>
               </div>
               <div className="space-y-3">
                 {sortedClusters.map((cluster, i) => (
-                  <ClusterCard key={i} cluster={cluster} onOpenDrawer={setDrawerCluster} />
+                  <ClusterCard key={i} cluster={cluster} />
                 ))}
               </div>
             </div>
+
+            {/* To Validate section */}
+            {analysis.to_validate && analysis.to_validate.length > 0 && (
+              <div>
+                <div
+                  className="flex items-center gap-2 cursor-pointer mb-3"
+                  onClick={() => setValidateExpanded((v) => !v)}
+                >
+                  {validateExpanded ? (
+                    <ChevronDown className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
+                  )}
+                  <h2 className="text-sm font-bold" style={{ color: "var(--text-muted)" }}>
+                    A Validar ({analysis.to_validate.length} clusters sem dados)
+                  </h2>
+                </div>
+                {validateExpanded && (
+                  <div className="space-y-3 opacity-70">
+                    {analysis.to_validate.map((cluster, i) => (
+                      <ClusterCard key={i} cluster={cluster} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
-
-      {/* Section D: Detail Drawer */}
-      <DetailDrawer cluster={drawerCluster} onClose={() => setDrawerCluster(null)} />
     </>
   );
 }
