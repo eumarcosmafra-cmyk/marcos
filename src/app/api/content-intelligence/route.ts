@@ -225,9 +225,15 @@ Agrupe por tema semântico amplo. NÃO fragmente em micro-clusters.
 
 JSON:
 {"classificacoes":[{"url":"string","title":"string","cluster":"string","entidade":"string","intencao":"informacional|comercial|transacional","impressoes":0,"cliques":0}]}`,
-        maxOutputTokens: 4000,
+        maxOutputTokens: 16000,
         temperature: 0.2,
       });
+
+      // Check for truncated response
+      const trimmed = rawText.trim();
+      if (!trimmed.endsWith("}") && !trimmed.endsWith("]")) {
+        throw new Error("Resposta truncada — reduza o número de URLs no slider e tente novamente.");
+      }
 
       const parsed = parseGeminiJSON<{ classificacoes: unknown[] }>(rawText);
 
