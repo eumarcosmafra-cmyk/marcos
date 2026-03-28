@@ -117,12 +117,17 @@ JSON:
 APENAS JSON.`;
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const message = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 8000,
-    messages: [{ role: "user", content: prompt }],
-  });
-  return (message.content.find((b) => b.type === "text") as { text: string })?.text ?? "";
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 8000,
+      messages: [{ role: "user", content: prompt }],
+    });
+    return (message.content.find((b) => b.type === "text") as { text: string })?.text ?? "";
+  } catch (e) {
+    console.error("[content-intelligence] Batch AI error:", e);
+    throw new Error(`AI batch error: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 // Step 3: Merge all batch classifications into final cluster analysis
@@ -204,7 +209,7 @@ ONLY valid JSON.`;
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const message = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: "claude-sonnet-4-6",
     max_tokens: 12000,
     messages: [{ role: "user", content: prompt }],
   });
