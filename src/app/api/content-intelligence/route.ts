@@ -55,8 +55,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Nenhuma URL de conteúdo encontrada" }, { status: 400 });
     }
 
-    // Limit to 50 URLs to avoid timeout
-    const limitedUrls = blogUrls.slice(0, 50);
+    // Limit to 25 URLs to stay within Vercel 60s timeout
+    const limitedUrls = blogUrls.slice(0, 25);
 
     // Try to get GSC data
     const session = await auth().catch(() => null);
@@ -138,11 +138,11 @@ export async function POST(request: NextRequest) {
 
     // Build prompt for Claude
     const urlSummaries = urlDataList.map((u) => {
-      const topQueries = u.queries.length > 0
-        ? u.queries.map((q) => `"${q.query}" (${q.impressions} imp, ${q.clicks} cli, pos ${q.position.toFixed(1)})`).join("; ")
-        : "(sem dados GSC)";
-      return `URL: ${u.url}\nTitle: ${u.title}\nSlug: ${u.slug}\nQueries: ${topQueries}\nImpr: ${u.totalImpressions} | Clicks: ${u.totalClicks}`;
-    }).join("\n---\n");
+      const topQ = u.queries.length > 0
+        ? u.queries.slice(0, 3).map((q) => `${q.query}(${q.impressions}imp)`).join(", ")
+        : "-";
+      return `${u.title} | ${u.url} | ${topQ} | ${u.totalImpressions}imp ${u.totalClicks}cli`;
+    }).join("\n");
 
     const prompt = `Você é um sistema especialista em análise de conteúdo SEO orientado a cluster, entidade e autoridade temática.
 
@@ -194,8 +194,8 @@ Responda APENAS com JSON válido. Sem markdown, sem explicação fora do JSON.`;
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 16000,
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 8000,
       messages: [{ role: "user", content: prompt }],
     });
     const aiResponse = (message.content.find((b) => b.type === "text") as { text: string })?.text ?? "";
