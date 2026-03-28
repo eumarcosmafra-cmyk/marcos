@@ -1,3 +1,7 @@
+// TODO: migrate to Upstash Redis — see fixes-spec-final.md Step 12
+// Current in-memory cache does not persist across Vercel serverless instances.
+// When UPSTASH_REDIS_REST_URL is configured, replace with async Redis version.
+
 interface CacheEntry {
   data: unknown;
   timestamp: number;
