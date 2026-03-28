@@ -124,54 +124,41 @@ Regras: agrupar por tema semântico, entidade = conceito central, evitar cluster
 
 // Step 3: Merge all batch classifications into final cluster analysis
 async function mergeAndAnalyze(allClassifications: { url: string; title: string; cluster: string; entidade: string; intencao: string; impressoes: number; cliques: number }[]): Promise<string> {
-  const clusterSummary: Record<string, { entidade: string; urls: number; impressoes: number; cliques: number; intencoes: string[] }> = {};
+  // Group by cluster for a compact summary
+  const clusterMap: Record<string, { entidade: string; urls: { url: string; title: string; intencao: string }[]; impressoes: number; cliques: number }> = {};
 
   for (const c of allClassifications) {
-    if (!clusterSummary[c.cluster]) {
-      clusterSummary[c.cluster] = { entidade: c.entidade, urls: 0, impressoes: 0, cliques: 0, intencoes: [] };
+    const key = c.cluster;
+    if (!clusterMap[key]) {
+      clusterMap[key] = { entidade: c.entidade, urls: [], impressoes: 0, cliques: 0 };
     }
-    clusterSummary[c.cluster].urls++;
-    clusterSummary[c.cluster].impressoes += c.impressoes;
-    clusterSummary[c.cluster].cliques += c.cliques;
-    clusterSummary[c.cluster].intencoes.push(c.intencao);
+    clusterMap[key].urls.push({ url: c.url, title: c.title, intencao: c.intencao });
+    clusterMap[key].impressoes += c.impressoes || 0;
+    clusterMap[key].cliques += c.cliques || 0;
   }
 
-  const summary = Object.entries(clusterSummary)
-    .map(([name, d]) => `${name}: ${d.urls} URLs, ${d.impressoes} imp, ${d.cliques} cli, entidade: ${d.entidade}`)
-    .join("\n");
+  const clusterList = Object.entries(clusterMap).map(([name, d]) => ({
+    nome: name,
+    entidade: d.entidade,
+    urls: d.urls,
+    total_urls: d.urls.length,
+    impressoes: d.impressoes,
+    cliques: d.cliques,
+  }));
 
-  const classJson = JSON.stringify(allClassifications);
+  const prompt = `Dado estes ${clusterList.length} clusters de conteúdo SEO já classificados, gere diagnóstico.
 
-  const prompt = `Você é especialista em SEO e autoridade temática. Dado estes clusters já classificados, gere o diagnóstico final.
+${JSON.stringify(clusterList)}
 
-CLUSTERS IDENTIFICADOS:
-${summary}
+Para cada cluster: score (forte/medio/fraco), cobertura (atual/ideal/gap), diagnóstico curto, e 2-3 oportunidades de conteúdo.
+Priorizar do mais crítico.
 
-CLASSIFICAÇÕES COMPLETAS:
-${classJson}
+JSON:
+{"clusters":[{"nome_cluster":"","entidade_principal":"","score":"forte|medio|fraco","total_urls":0,"urls":[{"url":"","title":"","tipo_intencao":""}],"metricas":{"impressoes":0,"cliques":0,"ctr_medio":0},"cobertura":{"atual":0,"ideal":0,"gap":0},"diagnostico":"","oportunidades":[""]}],"priorizacao":[{"cluster":"","motivo":""}],"resumo":{"total_urls":${allClassifications.length},"total_clusters":${clusterList.length},"clusters_fortes":0,"clusters_medios":0,"clusters_fracos":0}}
 
-Gere JSON com diagnóstico, gaps, oportunidades e priorização:
-{
-  "clusters": [
-    {
-      "nome_cluster": "string",
-      "entidade_principal": "string",
-      "score": "forte|medio|fraco",
-      "total_urls": number,
-      "urls": [{ "url": "string", "title": "string", "tipo_intencao": "string" }],
-      "metricas": { "impressoes": number, "cliques": number, "ctr_medio": number },
-      "cobertura": { "atual": number, "ideal": number, "gap": number },
-      "diagnostico": "string",
-      "oportunidades": ["string"]
-    }
-  ],
-  "priorizacao": [{ "cluster": "string", "motivo": "string" }],
-  "resumo": { "total_urls": number, "total_clusters": number, "clusters_fortes": number, "clusters_medios": number, "clusters_fracos": number }
-}
+APENAS JSON.`;
 
-Score: forte = impressões altas + CTR bom + cobertura ampla. fraco = pouca cobertura ou baixa tração.
-Gap: ideal = URLs necessárias pra cobrir o tema. atual = existentes. gap = ideal - atual.
-APENAS JSON válido.`;
+  console.log("[content-intelligence] Merge prompt length:", prompt.length, "clusters:", clusterList.length);
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const message = await anthropic.messages.create({
@@ -179,7 +166,10 @@ APENAS JSON válido.`;
     max_tokens: 8000,
     messages: [{ role: "user", content: prompt }],
   });
-  return (message.content.find((b) => b.type === "text") as { text: string })?.text ?? "";
+
+  const text = (message.content.find((b) => b.type === "text") as { text: string })?.text ?? "";
+  console.log("[content-intelligence] Merge response length:", text.length, "stop_reason:", message.stop_reason);
+  return text;
 }
 
 export async function POST(request: NextRequest) {
@@ -239,9 +229,48 @@ export async function POST(request: NextRequest) {
       try {
         const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
         if (jsonMatch) analysis = JSON.parse(jsonMatch[0]);
-      } catch {}
+      } catch (e) {
+        console.error("[content-intelligence] Merge parse error:", e, "Response:", aiResponse.substring(0, 500));
+      }
 
-      if (!analysis) return NextResponse.json({ error: "Falha ao gerar análise final" }, { status: 500 });
+      if (!analysis) {
+        // Fallback: build analysis from classifications directly
+        const clusterMap: Record<string, { entidade: string; urls: { url: string; title: string; tipo_intencao: string }[]; impressoes: number; cliques: number }> = {};
+        for (const c of classifications) {
+          if (!clusterMap[c.cluster]) clusterMap[c.cluster] = { entidade: c.entidade, urls: [], impressoes: 0, cliques: 0 };
+          clusterMap[c.cluster].urls.push({ url: c.url, title: c.title, tipo_intencao: c.intencao });
+          clusterMap[c.cluster].impressoes += c.impressoes || 0;
+          clusterMap[c.cluster].cliques += c.cliques || 0;
+        }
+
+        analysis = {
+          clusters: Object.entries(clusterMap).map(([name, d]) => ({
+            nome_cluster: name,
+            entidade_principal: d.entidade,
+            score: d.impressoes > 1000 ? "forte" : d.impressoes > 100 ? "medio" : "fraco",
+            total_urls: d.urls.length,
+            urls: d.urls,
+            metricas: { impressoes: d.impressoes, cliques: d.cliques, ctr_medio: d.impressoes > 0 ? d.cliques / d.impressoes : 0 },
+            cobertura: { atual: d.urls.length, ideal: Math.max(d.urls.length + 2, 5), gap: Math.max(0, 5 - d.urls.length) },
+            diagnostico: d.impressoes > 1000 ? "Cluster com boa tração" : "Cluster com cobertura limitada",
+            oportunidades: ["Expandir cobertura com mais conteúdos"],
+          })),
+          priorizacao: Object.entries(clusterMap)
+            .sort((a, b) => a[1].impressoes - b[1].impressoes)
+            .map(([name]) => ({ cluster: name, motivo: "Baixa cobertura ou tração" })),
+          resumo: {
+            total_urls: classifications.length,
+            total_clusters: Object.keys(clusterMap).length,
+            clusters_fortes: 0,
+            clusters_medios: 0,
+            clusters_fracos: 0,
+          },
+        };
+        const scores = analysis.clusters.map((c: { score: string }) => c.score);
+        analysis.resumo.clusters_fortes = scores.filter((s: string) => s === "forte").length;
+        analysis.resumo.clusters_medios = scores.filter((s: string) => s === "medio").length;
+        analysis.resumo.clusters_fracos = scores.filter((s: string) => s === "fraco").length;
+      }
 
       return NextResponse.json({
         step: "complete",
