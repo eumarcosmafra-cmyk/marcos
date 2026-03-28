@@ -540,8 +540,9 @@ function PriorityList({ items }: { items: { cluster: string; motivo: string }[] 
 export default function ContentIntelligencePage() {
   const [sitemapUrl, setSitemapUrl] = useState("");
   const [selectedSite, setSelectedSite] = useState("");
-  const [period, setPeriod] = useState("last28days");
+  const [period, setPeriod] = useState("3m");
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [drawerCluster, setDrawerCluster] = useState<Cluster | null>(null);
@@ -555,39 +556,67 @@ export default function ContentIntelligencePage() {
     return sortOrder === "worst" ? sorted : sorted.reverse();
   }, [analysis, sortOrder]);
 
-  // Run analysis
+  async function apiCall(body: Record<string, unknown>) {
+    const res = await fetch("/api/content-intelligence", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || `Erro ${res.status}`);
+    return data;
+  }
+
+  // Run analysis in batches
   async function handleAnalyze() {
     if (!sitemapUrl.trim()) return;
     setLoading(true);
     setError(null);
     setAnalysis(null);
+    setProgress("Escaneando sitemap e buscando dados do GSC...");
 
     try {
-      const res = await fetch("/api/content-intelligence", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sitemapUrl: sitemapUrl.trim(),
-          siteUrl: selectedSite || undefined,
-          period,
-        }),
+      // Step 1: Scan
+      const scanResult = await apiCall({
+        step: "scan",
+        sitemapUrl: sitemapUrl.trim(),
+        siteUrl: selectedSite || undefined,
+        period,
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Erro ${res.status}`);
+      const { batches, totalUrls, totalBatches } = scanResult;
+      setProgress(`${totalUrls} URLs encontradas. Classificando em ${totalBatches} lotes...`);
+
+      // Step 2: Analyze each batch
+      const allClassifications: unknown[] = [];
+      for (let i = 0; i < batches.length; i++) {
+        setProgress(`Analisando lote ${i + 1} de ${totalBatches} (${batches[i].urls.length} URLs)...`);
+        const batchResult = await apiCall({
+          step: "analyze_batch",
+          batchData: {
+            urls: batches[i].urls,
+            batchIndex: i,
+            totalBatches,
+          },
+        });
+        allClassifications.push(...(batchResult.classifications || []));
       }
 
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      // Step 3: Merge and generate final analysis
+      setProgress("Gerando diagnóstico final com IA...");
+      const mergeResult = await apiCall({
+        step: "merge",
+        batchData: { classifications: allClassifications },
+      });
 
-      const result = data.analysis as Analysis;
+      const result = mergeResult.analysis as Analysis;
       if (!result || !result.clusters) throw new Error("Resposta da IA incompleta");
       setAnalysis(result);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
       setLoading(false);
+      setProgress("");
     }
   }
 
@@ -685,10 +714,10 @@ export default function ContentIntelligencePage() {
           <div className="glass-card flex flex-col items-center justify-center p-12">
             <Loader2 className="h-10 w-10 animate-spin mb-4" style={{ color: "var(--brand-primary)" }} />
             <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-              Analisando conteudo com IA...
+              {progress || "Analisando conteúdo com IA..."}
             </p>
             <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>
-              Processando sitemap, metricas GSC e gerando clusters (pode levar ate 60s)
+              Processamento em lotes — cada lote leva ~15 segundos
             </p>
           </div>
         )}
