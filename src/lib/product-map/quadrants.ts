@@ -3,7 +3,7 @@ import type { CategoryAnalysis } from "@/lib/ga4/category-aggregation";
 export type QuadrantType = "protect" | "attack" | "reallocate" | "ignore";
 
 export interface Alert {
-  type: "cannibalization" | "orphan_category" | "depth_gap" | "seasonal_risk" | "position_drop" | "no_content";
+  type: string;
   severity: "critical" | "warning" | "info";
   message: string;
 }
