@@ -73,6 +73,12 @@ interface Analysis {
     total_clusters: number;
     critical_gaps: number;
     overall_geo: string;
+    zero_visibility?: number;
+    sitemap_orphans?: number;
+  };
+  gaps?: {
+    zeroVisibility: string[];
+    sitemapOrphans: string[];
   };
 }
 
@@ -458,11 +464,13 @@ export default function ContentIntelligencePage() {
   const [sitemapUrl, setSitemapUrl] = useState("");
   const [selectedSite, setSelectedSite] = useState("");
   const [period, setPeriod] = useState("3m");
+  const [topN, setTopN] = useState(100);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [validateExpanded, setValidateExpanded] = useState(false);
+  const [gapsExpanded, setGapsExpanded] = useState(false);
 
   // Sort clusters by opportunity_score desc (already sorted by API, but keep stable)
   const sortedClusters = useMemo(() => {
@@ -481,25 +489,29 @@ export default function ContentIntelligencePage() {
     return data;
   }
 
-  // Run analysis in batches
+  // Run analysis in batches (GSC-first)
   async function handleAnalyze() {
-    if (!sitemapUrl.trim()) return;
+    if (!selectedSite) {
+      setError("Selecione um site do GSC para começar.");
+      return;
+    }
     setLoading(true);
     setError(null);
     setAnalysis(null);
-    setProgress("Escaneando sitemap e buscando dados do GSC...");
+    setProgress("Buscando dados do GSC para URLs de blog...");
 
     try {
-      // Step 1: Scan
+      // Step 1: Scan (GSC-first, sitemap optional for gap detection)
       const scanResult = await apiCall({
         step: "scan",
-        sitemapUrl: sitemapUrl.trim(),
-        siteUrl: selectedSite || undefined,
+        siteUrl: selectedSite,
+        sitemapUrl: sitemapUrl.trim() || undefined,
         period,
+        topN,
       });
 
-      const { batches, totalUrls, totalBatches } = scanResult;
-      setProgress(`${totalUrls} URLs encontradas. Classificando em ${totalBatches} lotes...`);
+      const { batches, totalUrls, analyzingUrls, totalBatches, gaps } = scanResult;
+      setProgress(`${totalUrls} URLs no GSC, analisando top ${analyzingUrls} em ${totalBatches} lotes...`);
 
       // Step 2: Analyze each batch
       const allClassifications: unknown[] = [];
@@ -517,10 +529,10 @@ export default function ContentIntelligencePage() {
       }
 
       // Step 3: Merge and generate final analysis
-      setProgress("Gerando diagnostico final com IA...");
+      setProgress("Gerando diagnóstico final com IA...");
       const mergeResult = await apiCall({
         step: "merge",
-        batchData: { classifications: allClassifications },
+        batchData: { classifications: allClassifications, gaps },
       });
 
       const result = mergeResult.analysis as Analysis;
@@ -578,42 +590,20 @@ export default function ContentIntelligencePage() {
         </div>
 
         {/* ---- Input Section ---- */}
-        <div className="glass-card p-5">
+        <div className="glass-card p-5 space-y-4">
           <div className="flex flex-wrap items-end gap-4">
-            {/* Sitemap URL */}
-            <div className="flex-1 min-w-[280px]">
+            {/* GSC Site Selector — PRIMARY */}
+            <div className="min-w-[220px]">
               <label className="block text-[10px] font-medium uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                URL do Sitemap
-              </label>
-              <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 flex-shrink-0" style={{ color: "var(--text-muted)" }} />
-                <input
-                  type="url"
-                  value={sitemapUrl}
-                  onChange={(e) => setSitemapUrl(e.target.value)}
-                  placeholder="https://example.com/sitemap.xml"
-                  className="w-full rounded-lg px-3 py-2 text-sm outline-none transition-colors"
-                  style={{
-                    background: "var(--glass-bg)",
-                    border: "1px solid var(--glass-border)",
-                    color: "var(--text-primary)",
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* GSC Site Selector */}
-            <div className="min-w-[200px]">
-              <label className="block text-[10px] font-medium uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                Site GSC
+                Site GSC (obrigatório)
               </label>
               <GSCSiteSelector selectedSite={selectedSite} onSelect={setSelectedSite} />
             </div>
 
             {/* Period */}
-            <div className="min-w-[160px]">
+            <div className="min-w-[140px]">
               <label className="block text-[10px] font-medium uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
-                Periodo
+                Período
               </label>
               <select
                 value={period}
@@ -625,20 +615,34 @@ export default function ContentIntelligencePage() {
                   color: "var(--text-primary)",
                 }}
               >
-                <option value="last7days">Ultimos 7 dias</option>
-                <option value="last28days">Ultimos 28 dias</option>
-                <option value="last3months">Ultimos 3 meses</option>
-                <option value="last6months">Ultimos 6 meses</option>
+                <option value="28d">Últimos 28 dias</option>
+                <option value="3m">Últimos 3 meses</option>
+                <option value="6m">Últimos 6 meses</option>
               </select>
+            </div>
+
+            {/* Top N slider */}
+            <div className="min-w-[140px]">
+              <label className="block text-[10px] font-medium uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
+                Top URLs: {topN}
+              </label>
+              <div className="flex rounded-lg" style={{ border: "1px solid var(--glass-border)" }}>
+                {[50, 100, 150, 200].map((n) => (
+                  <button key={n} onClick={() => setTopN(n)}
+                    className={cn("px-2.5 py-2 text-[10px] font-medium transition-colors", topN === n ? "bg-brand-600 text-white" : "hover:bg-[var(--glass-hover)]")}
+                    style={topN !== n ? { color: "var(--text-muted)" } : undefined}
+                  >{n}</button>
+                ))}
+              </div>
             </div>
 
             {/* Analyze Button */}
             <button
               onClick={handleAnalyze}
-              disabled={loading || !sitemapUrl.trim()}
+              disabled={loading || !selectedSite}
               className={cn(
                 "flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-semibold text-white transition-all",
-                loading || !sitemapUrl.trim()
+                loading || !selectedSite
                   ? "cursor-not-allowed opacity-50"
                   : "hover:opacity-90"
               )}
@@ -647,6 +651,21 @@ export default function ContentIntelligencePage() {
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               Analisar
             </button>
+          </div>
+
+          {/* Sitemap URL — optional for gap detection */}
+          <div>
+            <label className="block text-[10px] font-medium uppercase tracking-wider mb-1.5" style={{ color: "var(--text-muted)" }}>
+              Sitemap do blog (opcional — para detectar posts sem tráfego)
+            </label>
+            <input
+              type="url"
+              value={sitemapUrl}
+              onChange={(e) => setSitemapUrl(e.target.value)}
+              placeholder="https://example.com/sitemap-blog.xml"
+              className="w-full rounded-lg px-3 py-2 text-sm outline-none transition-colors"
+              style={{ background: "var(--glass-bg)", border: "1px solid var(--glass-border)", color: "var(--text-primary)" }}
+            />
           </div>
         </div>
 
@@ -670,12 +689,15 @@ export default function ContentIntelligencePage() {
             style={{ borderLeft: "3px solid rgb(248, 113, 113)" }}
           >
             <AlertTriangle className="h-5 w-5 flex-shrink-0" style={{ color: "rgb(248, 113, 113)" }} />
-            <div>
+            <div className="flex-1">
               <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                Erro na analise
+                Erro na análise
               </p>
               <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{error}</p>
             </div>
+            <button onClick={handleAnalyze} className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-[10px] font-medium text-white hover:opacity-90">
+              Tentar novamente
+            </button>
           </div>
         )}
 
@@ -684,17 +706,22 @@ export default function ContentIntelligencePage() {
           <>
             {/* Zone 1: Executive Summary */}
             <div className="space-y-4">
-              {/* 4 metric cards */}
-              <div className="grid grid-cols-4 gap-3">
+              {/* 5 metric cards */}
+              <div className="grid grid-cols-5 gap-3">
                 <KpiCard icon={FileText} label="URLs Analisadas" value={analysis.resumo.total_urls} accent="text-brand-400" />
                 <KpiCard icon={Layers} label="Clusters Reais" value={analysis.resumo.total_clusters} accent="text-brand-400" />
-                <KpiCard icon={AlertTriangle} label="Gaps Criticos" value={analysis.resumo.critical_gaps} accent="text-red-400" />
+                <KpiCard icon={AlertTriangle} label="Gaps Críticos" value={analysis.resumo.critical_gaps} accent="text-red-400" />
+                <KpiCard icon={Eye} label="Posts sem Visibilidade" value={analysis.resumo.zero_visibility || 0} accent="text-yellow-400" />
                 <KpiCard icon={Zap} label="GEO Score" value={analysis.resumo.overall_geo} accent="text-emerald-400" />
               </div>
 
               {/* AI diagnosis */}
               {analysis.executive_summary && (
                 <div className="glass-card p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Brain className="h-4 w-4" style={{ color: "var(--brand-primary)" }} />
+                    <p className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Diagnóstico IA</p>
+                  </div>
                   <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
                     {analysis.executive_summary}
                   </p>
@@ -765,6 +792,49 @@ export default function ContentIntelligencePage() {
                     {analysis.to_validate.map((cluster, i) => (
                       <ClusterCard key={i} cluster={cluster} />
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Zone 4: Zero visibility posts */}
+            {analysis.gaps?.zeroVisibility && analysis.gaps.zeroVisibility.length > 0 && (
+              <div>
+                <div
+                  className="flex items-center gap-2 cursor-pointer mb-3"
+                  onClick={() => setGapsExpanded((v) => !v)}
+                >
+                  {gapsExpanded ? (
+                    <ChevronDown className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
+                  )}
+                  <h2 className="text-sm font-bold" style={{ color: "var(--text-muted)" }}>
+                    Posts sem Visibilidade no Google ({analysis.gaps.zeroVisibility.length})
+                  </h2>
+                </div>
+                {gapsExpanded && (
+                  <div className="glass-card overflow-hidden">
+                    <div className="space-y-0">
+                      {analysis.gaps.zeroVisibility.map((url, i) => {
+                        const slug = url.split("/").filter(Boolean).pop() || url;
+                        return (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between px-4 py-2.5 transition-colors hover:bg-[var(--glass-hover)]"
+                            style={{ borderBottom: i < analysis.gaps!.zeroVisibility.length - 1 ? "1px solid var(--glass-border)" : "none" }}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{slug}</p>
+                              <p className="text-[9px] truncate" style={{ color: "var(--text-muted)" }}>{url}</p>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-yellow-600/15 px-2 py-0.5 text-[9px] font-medium text-yellow-400">
+                              Verificar indexação
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
