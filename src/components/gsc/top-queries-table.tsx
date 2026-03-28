@@ -30,7 +30,7 @@ export function TopQueriesTable({ siteUrl, period = "28d", limit = 20 }: TopQuer
       .then((json) => {
         if (json.data?.topQueries) setQueries(json.data.topQueries);
       })
-      .catch(() => {})
+      .catch((e) => { console.error("[top-queries-table] Error:", e); })
       .finally(() => setLoading(false));
   }, [session?.accessToken, siteUrl, period]);
 

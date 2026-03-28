@@ -156,7 +156,7 @@ Responda APENAS em JSON válido.`;
         internalLinkingSuggestions: parsed.internalLinkingSuggestions || [],
       };
     }
-  } catch {}
+  } catch (e) { console.error("[analyze-serp] Error:", e); }
 
   // Fallback
   return {

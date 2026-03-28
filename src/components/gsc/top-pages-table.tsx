@@ -30,7 +30,7 @@ export function TopPagesTable({ siteUrl, period = "28d", limit = 20 }: TopPagesT
       .then((json) => {
         if (json.data?.topPages) setPages(json.data.topPages);
       })
-      .catch(() => {})
+      .catch((e) => { console.error("[top-pages-table] Error:", e); })
       .finally(() => setLoading(false));
   }, [session?.accessToken, siteUrl, period]);
 

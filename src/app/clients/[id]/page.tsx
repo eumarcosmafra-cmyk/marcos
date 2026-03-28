@@ -52,7 +52,7 @@ export default function ClientDetailPage() {
         }
 
         setClient(found || null);
-      } catch {}
+      } catch (e) { console.error("[page] Error:", e); }
       setLoading(false);
     }
     loadClient();
@@ -82,7 +82,7 @@ export default function ClientDetailPage() {
         );
         if (match) setGscSiteUrl(match.siteUrl);
       })
-      .catch(() => {});
+      .catch((e) => { console.error("[client-detail] Error:", e); });
   }, [session?.accessToken, client]);
 
   if (loading) {
@@ -311,7 +311,7 @@ function RankingsTab({ clientId }: { clientId: string }) {
     fetch(`/api/clients/${clientId}/rankings`)
       .then((r) => r.json())
       .then((data) => setRankings(data.rankings || []))
-      .catch(() => {})
+      .catch((e) => { console.error("[client-detail] Error:", e); })
       .finally(() => setLoading(false));
   }, [clientId]);
 

@@ -34,7 +34,7 @@ export default function DashboardPage() {
       const res = await fetch("/api/gsc/sync", { method: "POST" });
       const json = await res.json();
       if (json.clients) setClients(json.clients);
-    } catch {}
+    } catch (e) { console.error("[page] Error:", e); }
     setSyncing(false);
   }, [session?.accessToken]);
 

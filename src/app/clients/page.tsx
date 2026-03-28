@@ -67,7 +67,7 @@ export default function ClientsPage() {
         setNewClient({ name: "", domain: "", industry: "", notes: "" });
         setShowForm(false);
       }
-    } catch {}
+    } catch (e) { console.error("[page] Error:", e); }
   };
 
   const handleDelete = (id: string) => {

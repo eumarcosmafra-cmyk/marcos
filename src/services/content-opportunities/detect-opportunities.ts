@@ -110,7 +110,7 @@ export async function detectContentOpportunities(
             sourceType: "content_gap",
           });
         }
-      } catch {}
+      } catch (e) { console.error("[detect-opportunities] Error:", e); }
     }
   }
 

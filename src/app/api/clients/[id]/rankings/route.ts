@@ -136,7 +136,7 @@ export async function GET(request: NextRequest, context: Params) {
               domain: r.domain || "",
             }));
           }
-        } catch {}
+        } catch (e) { console.error("[route] Error:", e); }
       }
 
       rankings.push({

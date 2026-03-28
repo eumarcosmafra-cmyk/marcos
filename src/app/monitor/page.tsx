@@ -112,7 +112,7 @@ export default function MonitorPage() {
         if (list.length > 0 && !selectedClient) {
           setSelectedClient(list[0].id);
         }
-      } catch {}
+      } catch (e) { console.error("[page] Error:", e); }
     }
     loadClients();
   // eslint-disable-next-line react-hooks/exhaustive-deps

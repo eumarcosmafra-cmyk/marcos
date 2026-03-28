@@ -41,7 +41,7 @@ async function parseSitemapIndex(xml: string): Promise<SitemapUrl[]> {
         const subXml = await res.text();
         results.push(...parseUrlset(subXml));
       }
-    } catch {}
+    } catch (e) { console.error("[parser] Error:", e); }
   }
 
   return results;

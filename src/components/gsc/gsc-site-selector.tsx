@@ -26,7 +26,7 @@ export function GSCSiteSelector({ selectedSite, onSelect }: GSCSiteSelectorProps
       .then((json) => {
         if (json.sites) setSites(json.sites);
       })
-      .catch(() => {})
+      .catch((e) => { console.error("[gsc-site-selector] Error:", e); })
       .finally(() => setLoading(false));
   }, [session?.accessToken]);
 
