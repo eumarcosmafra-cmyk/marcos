@@ -48,8 +48,8 @@ export async function GET(request: NextRequest, context: Params) {
     const previousRange = getMonthRange(1);
 
     // Fetch GSC data for both months
-    let currentRows: any[] = [];
-    let previousRows: any[] = [];
+    let currentRows: { keys?: string[]; position?: number; clicks?: number; impressions?: number; ctr?: number }[] = [];
+    let previousRows: { keys?: string[]; position?: number; clicks?: number; impressions?: number; ctr?: number }[] = [];
     if (gscSite) {
       const [cr, pr] = await Promise.all([
         getSearchAnalytics(session.accessToken, gscSite, {
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest, context: Params) {
     const rankings = [];
 
     for (const cat of categories) {
-      const primaryQuery = cat.trackedQueries.find((q: any) => q.isPrimary);
+      const primaryQuery = cat.trackedQueries.find((q: { isPrimary: boolean }) => q.isPrimary);
       if (!primaryQuery) {
         rankings.push({
           id: cat.id,
@@ -93,13 +93,13 @@ export async function GET(request: NextRequest, context: Params) {
       const targetNorm = cat.targetUrl.replace(/\/$/, "").toLowerCase();
 
       // Find GSC match for current month
-      const currentMatch = (currentRows as any[]).find((r: any) => {
+      const currentMatch = (currentRows as { keys?: string[]; position?: number; clicks?: number; impressions?: number; ctr?: number }[]).find((r: { keys?: string[]; position?: number; clicks?: number; impressions?: number; ctr?: number }) => {
         const rq = (r.keys?.[0] || "").toLowerCase();
         const rp = (r.keys?.[1] || "").replace(/\/$/, "").toLowerCase();
         return rq === query.toLowerCase() && (rp === targetNorm || rp.startsWith(targetNorm));
       });
 
-      const previousMatch = (previousRows as any[]).find((r: any) => {
+      const previousMatch = (previousRows as { keys?: string[]; position?: number; clicks?: number; impressions?: number; ctr?: number }[]).find((r: { keys?: string[]; position?: number; clicks?: number; impressions?: number; ctr?: number }) => {
         const rq = (r.keys?.[0] || "").toLowerCase();
         const rp = (r.keys?.[1] || "").replace(/\/$/, "").toLowerCase();
         return rq === query.toLowerCase() && (rp === targetNorm || rp.startsWith(targetNorm));
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest, context: Params) {
           });
           if (res.ok) {
             const data = await res.json();
-            serpTop5 = (data.organic || []).slice(0, 5).map((r: any, i: number) => ({
+            serpTop5 = (data.organic || []).slice(0, 5).map((r: { position?: number; title?: string; link?: string; domain?: string }, i: number) => ({
               position: r.position || i + 1,
               title: r.title || "",
               url: r.link || "",

@@ -544,7 +544,7 @@ export default function ContentIntelligencePage() {
         // Legacy: convert priorizacao if it exists
         const legacy = result as any;
         if (legacy.priorizacao) {
-          result.priority_queue = legacy.priorizacao.map((p: any) => ({
+          result.priority_queue = legacy.priorizacao.map((p: { cluster?: string; motivo?: string; reason?: string; action?: string }) => ({
             cluster: p.cluster,
             reason: p.motivo || p.reason || "",
             action: p.action || "Expandir",
