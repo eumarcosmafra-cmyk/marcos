@@ -16,6 +16,7 @@ import {
   Lightbulb,
   Map,
   Package,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/providers/theme-provider";
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/opportunities", label: "Oportunidades", icon: Zap },
   { href: "/category-map", label: "Category Map", icon: Map },
   { href: "/product-map", label: "Product Map", icon: Package },
+  { href: "/content-intelligence", label: "Content Intelligence", icon: Brain },
   { href: "/settings", label: "Configurações", icon: Settings },
 ];
 
