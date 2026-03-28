@@ -124,14 +124,10 @@ function PositionGroupGrid({
   group,
   categories,
   onSelect,
-  onCheckSerp,
-  checkingSerpId,
 }: {
   group: typeof POSITION_GROUPS[number];
   categories: CategoryNode[];
   onSelect: (c: CategoryNode) => void;
-  onCheckSerp?: (c: CategoryNode) => void;
-  checkingSerpId?: string | null;
 }) {
   if (categories.length === 0) return null;
 
@@ -196,46 +192,16 @@ function PositionGroupGrid({
                 {cat.topQuery}
               </p>
               <div className="mt-auto flex items-end justify-between pt-2">
-                <div>
-                  {cat.serpChecked ? (
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-lg font-bold" style={{ color: ac.text }}>
-                        {cat.serpPosition ? `#${cat.serpPosition}` : "—"}
-                      </span>
-                      <span className="text-[8px] font-medium" style={{ color: ac.text }}>SERP</span>
-                      <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                        | GSC {cat.position > 0 ? cat.position.toFixed(1) : "—"}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-lg font-bold" style={{ color: ac.text }}>
-                        {cat.position > 0 ? cat.position.toFixed(1) : "—"}
-                      </span>
-                      <span className="text-[8px]" style={{ color: "var(--text-muted)" }}>GSC</span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-end gap-2">
-                  <div className="text-right">
-                    <span className="block text-[9px]" style={{ color: "var(--text-muted)" }}>
-                      {cat.impressions.toLocaleString("pt-BR")} imp
-                    </span>
-                    <span className="block text-[9px]" style={{ color: "var(--text-muted)" }}>
-                      {cat.clicks.toLocaleString("pt-BR")} cli
-                    </span>
-                  </div>
-                  {onCheckSerp && !cat.serpChecked && cat.topQuery && !cat.topQuery.startsWith("(") && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onCheckSerp(cat); }}
-                      disabled={checkingSerpId === cat.id}
-                      className="rounded bg-white/10 px-1.5 py-1 text-[8px] font-medium transition-colors hover:bg-white/20"
-                      style={{ color: "var(--text-muted)" }}
-                      title="Buscar posição real na SERP"
-                    >
-                      {checkingSerpId === cat.id ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "SERP"}
-                    </button>
-                  )}
+                <span className="text-lg font-bold" style={{ color: ac.text }}>
+                  {cat.position > 0 ? cat.position.toFixed(1) : "—"}
+                </span>
+                <div className="text-right">
+                  <span className="block text-[9px]" style={{ color: "var(--text-muted)" }}>
+                    {cat.impressions.toLocaleString("pt-BR")} imp
+                  </span>
+                  <span className="block text-[9px]" style={{ color: "var(--text-muted)" }}>
+                    {cat.clicks.toLocaleString("pt-BR")} cli
+                  </span>
                 </div>
               </div>
 
@@ -281,13 +247,9 @@ function PositionGroupGrid({
 function DetailDrawer({
   category,
   onClose,
-  onCheckSerp,
-  checkingSerpId,
 }: {
   category: CategoryNode | null;
   onClose: () => void;
-  onCheckSerp?: (c: CategoryNode) => void;
-  checkingSerpId?: string | null;
 }) {
   if (!category) return null;
   const cfg = STATUS_CONFIG[category.status];
@@ -356,48 +318,8 @@ function DetailDrawer({
 
           {/* Metrics grid */}
           <div className="grid grid-cols-2 gap-3">
-            {/* SERP Real — with check button */}
-            <div
-              className={cn(
-                "glass-card p-3",
-                !category.serpChecked && onCheckSerp && "cursor-pointer hover:bg-[var(--glass-hover)] transition-colors"
-              )}
-              onClick={() => {
-                if (!category.serpChecked && onCheckSerp && category.topQuery && !category.topQuery.startsWith("(")) {
-                  onCheckSerp(category);
-                }
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Search className="h-3 w-3" style={{ color: "var(--text-muted)" }} />
-                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>SERP Real</span>
-                </div>
-                {!category.serpChecked && onCheckSerp && category.topQuery && !category.topQuery.startsWith("(") && (
-                  <span className="rounded bg-brand-600 px-2 py-0.5 text-[9px] font-medium text-white">
-                    {checkingSerpId === category.id ? (
-                      <Loader2 className="inline h-2.5 w-2.5 animate-spin" />
-                    ) : (
-                      "Buscar"
-                    )}
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 text-lg font-bold" style={{ color: category.serpChecked && category.serpPosition ? cfg.color : "var(--text-muted)" }}>
-                {category.serpChecked
-                  ? category.serpPosition ? `#${category.serpPosition}` : "Fora do Top 100"
-                  : "Não verificado"}
-              </p>
-              {category.serpChecked && !category.serpPosition && category.serpDebug && (
-                <p className="mt-1 text-[8px] break-all" style={{ color: "var(--text-muted)" }}>
-                  q: {category.serpDebug.querySent} | target: {category.serpDebug.targetDomain} | results: {category.serpDebug.totalResults} | key: {category.serpDebug.apiKeyPrefix}
-                </p>
-              )}
-            </div>
-
-            {/* Other metrics */}
             {[
-              { label: "GSC Média", value: category.position > 0 ? category.position.toFixed(1) : "—", icon: TrendingUp, accent: cfg.color },
+              { label: "Posição GSC", value: category.position > 0 ? category.position.toFixed(1) : "—", icon: TrendingUp, accent: cfg.color },
               { label: "Cliques", value: category.clicks.toLocaleString("pt-BR"), icon: MousePointerClick, accent: "var(--text-primary)" },
               { label: "Impressoes", value: category.impressions.toLocaleString("pt-BR"), icon: Eye, accent: "var(--text-primary)" },
               { label: "CTR", value: `${(category.ctr * 100).toFixed(1)}%`, icon: TrendingUp, accent: "var(--text-primary)" },
@@ -415,40 +337,6 @@ function DetailDrawer({
               </div>
             ))}
           </div>
-
-          {/* SERP Top 10 Results */}
-          {category.serpChecked && category.serpTop10 && category.serpTop10.length > 0 && (
-            <div>
-              <p className="mb-2 text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-                SERP Real — &quot;{category.serpQuery || category.topQuery}&quot;
-              </p>
-              <div className="space-y-1">
-                {category.serpTop10.map((r) => {
-                  const isClient = r.domain.includes(normalizeDomainForMatch(category.url));
-                  return (
-                    <div
-                      key={r.url}
-                      className={cn("flex items-center gap-2 rounded px-2 py-1.5", isClient && "bg-emerald-600/15 ring-1 ring-emerald-500/20")}
-                    >
-                      <span
-                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
-                        style={{ background: "var(--glass-border)", color: "var(--text-primary)" }}
-                      >
-                        {r.position}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[10px] font-medium" style={{ color: isClient ? "rgb(52, 211, 153)" : "var(--text-primary)" }}>
-                          {r.title}
-                        </p>
-                        <p className="truncate text-[9px]" style={{ color: "var(--text-muted)" }}>{r.domain}</p>
-                      </div>
-                      {isClient && <span className="shrink-0 text-[9px] font-medium text-emerald-400">Você</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {/* Diagnosis */}
           <div
@@ -511,13 +399,9 @@ type SortKey = "name" | "topQuery" | "position" | "impressions" | "clicks" | "ct
 function StrategicTable({
   categories,
   onSelect,
-  onCheckSerp,
-  checkingSerpId,
 }: {
   categories: CategoryNode[];
   onSelect: (c: CategoryNode) => void;
-  onCheckSerp?: (c: CategoryNode) => void;
-  checkingSerpId?: string | null;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortAsc, setSortAsc] = useState(false);
@@ -681,34 +565,9 @@ function StrategicTable({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {cat.serpChecked ? (
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-xs font-bold" style={{ color: cfg.color }}>
-                              {cat.serpPosition ? `#${cat.serpPosition}` : "—"}
-                            </span>
-                            <span className="text-[8px]" style={{ color: "var(--text-muted)" }}>SERP</span>
-                            <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                              | {cat.position.toFixed(1)}
-                            </span>
-                            <span className="text-[8px]" style={{ color: "var(--text-muted)" }}>GSC</span>
-                          </div>
-                        ) : (
-                          <span className="text-xs font-semibold" style={{ color: cfg.color }}>
-                            {cat.position.toFixed(1)}
-                          </span>
-                        )}
-                        {onCheckSerp && !cat.serpChecked && cat.topQuery && !cat.topQuery.startsWith("(") && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onCheckSerp(cat); }}
-                            disabled={checkingSerpId === cat.id}
-                            className="rounded bg-white/10 px-1.5 py-0.5 text-[8px] font-medium hover:bg-white/20"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            {checkingSerpId === cat.id ? "..." : "SERP"}
-                          </button>
-                        )}
-                      </div>
+                      <span className="text-xs font-semibold" style={{ color: cfg.color }}>
+                        {cat.position.toFixed(1)}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -788,7 +647,6 @@ export default function CategoryMapPage() {
   const [selectedCategory, setSelectedCategory] = useState<CategoryNode | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [posFilter, setPosFilter] = useState<"all" | "1-5" | "6-10" | "11-20" | "21+">("all");
-  const [checkingSerpId, setCheckingSerpId] = useState<string | null>(null);
 
   // Derived KPIs
   const kpis = useMemo(() => {
@@ -815,35 +673,6 @@ export default function CategoryMapPage() {
   }, [categories, posFilter]);
 
   // Check real SERP position for a category
-  async function checkSerpPosition(cat: CategoryNode) {
-    if (!cat.topQuery || cat.topQuery.startsWith("(")) return;
-    setCheckingSerpId(cat.id);
-    try {
-      // Use the GSC top query — this is the query that actually drives traffic
-      const res = await fetch("/api/category-map/serp-check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: cat.topQuery, targetUrl: cat.url }),
-      });
-      const data = await res.json();
-      const update = {
-        serpPosition: data.position ?? null,
-        serpChecked: true,
-        serpMatch: data.match ?? null,
-        serpTop10: data.top10 ?? [],
-        serpQuery: cat.topQuery,
-        serpDebug: data.debug ?? null,
-      };
-      setCategories((prev) =>
-        prev.map((c) => c.id === cat.id ? { ...c, ...update } : c)
-      );
-      if (selectedCategory?.id === cat.id) {
-        setSelectedCategory((prev) => prev ? { ...prev, ...update } : prev);
-      }
-    } catch {}
-    setCheckingSerpId(null);
-  }
-
   // Load data
   async function loadData(useMock: boolean) {
     setLoading(true);
@@ -1079,8 +908,6 @@ export default function CategoryMapPage() {
                     group={group}
                     categories={groupCats}
                     onSelect={setSelectedCategory}
-                    onCheckSerp={checkSerpPosition}
-                    checkingSerpId={checkingSerpId}
                   />
                 );
               })}
@@ -1090,8 +917,6 @@ export default function CategoryMapPage() {
                   group={POSITION_GROUPS[3]}
                   categories={filteredCategories.filter((c) => !c.position || c.position === 0)}
                   onSelect={setSelectedCategory}
-                  onCheckSerp={checkSerpPosition}
-                  checkingSerpId={checkingSerpId}
                 />
               )}
             </div>
@@ -1104,7 +929,7 @@ export default function CategoryMapPage() {
             <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
               Tabela Estrategica
             </h2>
-            <StrategicTable categories={filteredCategories} onSelect={setSelectedCategory} onCheckSerp={checkSerpPosition} checkingSerpId={checkingSerpId} />
+            <StrategicTable categories={filteredCategories} onSelect={setSelectedCategory} />
           </div>
         </>
       )}
@@ -1115,8 +940,6 @@ export default function CategoryMapPage() {
       <DetailDrawer
         category={selectedCategory}
         onClose={() => setSelectedCategory(null)}
-        onCheckSerp={checkSerpPosition}
-        checkingSerpId={checkingSerpId}
       />
     </div>
   );
