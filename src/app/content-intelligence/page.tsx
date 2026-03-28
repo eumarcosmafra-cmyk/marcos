@@ -563,12 +563,14 @@ export default function ContentIntelligencePage() {
     setAnalysis(null);
 
     try {
-      const params = new URLSearchParams({ sitemapUrl: sitemapUrl.trim() });
-      if (selectedSite) params.set("siteUrl", selectedSite);
-      if (period) params.set("period", period);
-
-      const res = await fetch(`/api/content-intelligence?${params.toString()}`, {
+      const res = await fetch("/api/content-intelligence", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sitemapUrl: sitemapUrl.trim(),
+          siteUrl: selectedSite || undefined,
+          period,
+        }),
       });
 
       if (!res.ok) {
@@ -576,8 +578,12 @@ export default function ContentIntelligencePage() {
         throw new Error(data.error || `Erro ${res.status}`);
       }
 
-      const data: Analysis = await res.json();
-      setAnalysis(data);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      const result = data.analysis as Analysis;
+      if (!result || !result.clusters) throw new Error("Resposta da IA incompleta");
+      setAnalysis(result);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
