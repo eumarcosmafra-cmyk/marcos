@@ -224,7 +224,10 @@ ${urlSummaries}
 Agrupe por tema semântico amplo. NÃO fragmente em micro-clusters.
 
 JSON:
-{"classificacoes":[{"url":"string","title":"string","cluster":"string","entidade":"string","intencao":"informacional|comercial|transacional","impressoes":0,"cliques":0}]}`,
+{"classificacoes":[{"url":"string","title":"string","cluster":"string","entidade":"string","intencao":"informacional|comercial|transacional","impressoes":0,"cliques":0}]}
+
+IMPORTANTE: Escape todas as aspas duplas dentro de valores string com \\. Nunca use quebras de linha dentro de valores string. Títulos de produtos devem ter aspas escapadas.
+APENAS JSON.`,
         maxOutputTokens: 16000,
         temperature: 0.2,
       });
@@ -235,7 +238,24 @@ JSON:
         throw new Error("Resposta truncada — reduza o número de URLs no slider e tente novamente.");
       }
 
-      const parsed = parseGeminiJSON<{ classificacoes: unknown[] }>(rawText);
+      // Sanitize control characters before parsing
+      const sanitized = rawText
+        .replace(/[\u0000-\u001F\u007F]/g, " ")
+        .replace(/\t/g, " ")
+        .trim();
+
+      let parsed: { classificacoes: unknown[] };
+      try {
+        parsed = parseGeminiJSON<{ classificacoes: unknown[] }>(sanitized);
+      } catch (e) {
+        if (e instanceof SyntaxError) {
+          const match = e.message.match(/position (\d+)/);
+          const pos = match ? parseInt(match[1]) : -1;
+          console.error("[content-intelligence] JSON SyntaxError at position", pos, "Raw:", rawText.slice(0, 200));
+          throw new Error("Resposta truncada ou malformada. Tente reduzir o número de URLs.");
+        }
+        throw e;
+      }
 
       return NextResponse.json({
         step: "batch_complete",
