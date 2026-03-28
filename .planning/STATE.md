@@ -3,23 +3,29 @@
 > Atualizar ao fim de cada sessão de desenvolvimento.
 
 ## Status
-Fase: Estabilização e fixes críticos
+Fase: Features v3 + estabilização
 Data última atualização: 2026-03-28
 
-## O que foi feito
-- Auth guard aplicado em 17 rotas de API
-- Migração Anthropic → Gemini 2.5 Flash (ai-client.ts, gemini.ts)
-- Content Intelligence v3 (GSC-first, batches, Gemini)
-- Category Map com agrupamento por posição
-- Product Map básico com sitemap + GSC
-- CLAUDE.md e settings.json criados
+## Concluído (sessão atual)
+- Auth guard em 17+ rotas de API (require-auth.ts)
+- Migração completa Anthropic → Gemini 2.5 Flash (zero referências Anthropic)
+- lib/gemini.ts com callGemini() + parseGeminiJSON()
+- ai-client.ts reescrito usando gemini.ts
+- Content Intelligence API v3 (GSC-first, batches de 25 URLs, Gemini)
+- Content Intelligence frontend v3 (4 zonas, 5 KPIs, priority queue, gap detection)
+- Category Map com agrupamento por faixa de posição
+- Product Map libs criados (GA4 CSV parser + category aggregation)
+- CLAUDE.md, STATE.md, settings.json criados
+- Tipos: content-intelligence.ts, product-diagnosis.ts
+- Settings page atualizada (Gemini em vez de Anthropic)
 
-## Próximos passos
-1. Corrigir silent catches
-2. Criar tipos TypeScript para responses de IA
-3. Content Intelligence frontend v3 (4 zonas)
-4. Product Map v2 (CSV upload, quadrantes, 3 modos)
-5. Arquitetura multi-tenant
+## Próximos passos (em ordem)
+1. Product Map v2 — reescrever page.tsx em 4 blocos (Step 17b-17d da master spec)
+   - Libs GA4 já existem (csv-parser.ts, category-aggregation.ts)
+   - Falta: quadrants.ts, componentes UI, integração no page.tsx
+2. Corrigir silent catches restantes
+3. Implementar botão "Salvar no projeto" (AnalysisSnapshot)
+4. Arquitetura multi-tenant (Parte 3 da master spec)
 
 ## Variáveis de ambiente
 ```
