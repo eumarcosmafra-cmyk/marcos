@@ -25,8 +25,6 @@ const navItems = [
   { href: "/clients", label: "Clientes", icon: Users },
   { href: "/monitor", label: "Monitor", icon: Shield },
   { href: "/opportunities", label: "Oportunidades", icon: Zap },
-  { href: "/category-map", label: "Category Map", icon: Map },
-  { href: "/product-map", label: "Product Map", icon: Package },
   { href: "/settings", label: "Configurações", icon: Settings },
 ];
 

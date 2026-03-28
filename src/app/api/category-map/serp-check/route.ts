@@ -137,6 +137,13 @@ export async function POST(request: NextRequest) {
       position: null,
       match: null,
       top10,
+      debug: {
+        querySent: query,
+        targetUrl,
+        targetDomain,
+        totalResults: organic.length,
+        apiKeyPrefix: env.SERP_API_KEY.substring(0, 8) + "...",
+      },
     });
   } catch (error) {
     console.error("[serp-check] Error:", error);

@@ -43,6 +43,7 @@ interface CategoryNode {
   serpMatch?: string | null;
   serpTop10?: { position: number; domain: string; title: string; url: string }[];
   serpQuery?: string;
+  serpDebug?: { querySent: string; targetUrl: string; targetDomain: string; totalResults: number; apiKeyPrefix: string } | null;
 }
 
 interface ApiResponse {
@@ -384,9 +385,14 @@ function DetailDrawer({
               </div>
               <p className="mt-1 text-lg font-bold" style={{ color: category.serpChecked && category.serpPosition ? cfg.color : "var(--text-muted)" }}>
                 {category.serpChecked
-                  ? category.serpPosition ? `#${category.serpPosition}` : "Fora do Top 30"
+                  ? category.serpPosition ? `#${category.serpPosition}` : "Fora do Top 100"
                   : "Não verificado"}
               </p>
+              {category.serpChecked && !category.serpPosition && category.serpDebug && (
+                <p className="mt-1 text-[8px] break-all" style={{ color: "var(--text-muted)" }}>
+                  q: {category.serpDebug.querySent} | target: {category.serpDebug.targetDomain} | results: {category.serpDebug.totalResults} | key: {category.serpDebug.apiKeyPrefix}
+                </p>
+              )}
             </div>
 
             {/* Other metrics */}
@@ -826,6 +832,7 @@ export default function CategoryMapPage() {
         serpMatch: data.match ?? null,
         serpTop10: data.top10 ?? [],
         serpQuery: cat.topQuery,
+        serpDebug: data.debug ?? null,
       };
       setCategories((prev) =>
         prev.map((c) => c.id === cat.id ? { ...c, ...update } : c)
