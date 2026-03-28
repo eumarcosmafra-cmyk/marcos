@@ -15,6 +15,16 @@ function normalizeDomain(url: string): string {
   }
 }
 
+/** Strip query params and trailing slash, lowercase */
+function normalizeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return (u.origin + u.pathname).replace(/\/$/, "").toLowerCase();
+  } catch {
+    return url.replace(/\?.*$/, "").replace(/\/$/, "").toLowerCase();
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -31,35 +41,28 @@ export async function POST(request: NextRequest) {
 
     const env = getEnv();
 
-    const requestBody = {
-      q: query,
-      gl: "br",
-      hl: "pt-br",
-      num: 30,
-      type: "search",
-      engine: "google",
-    };
-
-    console.log("[serp-check] Request:", JSON.stringify(requestBody));
-
     const res = await fetch("https://google.serper.dev/search", {
       method: "POST",
       headers: {
         "X-API-KEY": env.SERP_API_KEY,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify({
+        q: query,
+        gl: "br",
+        hl: "pt-br",
+        num: 100,
+        type: "search",
+        engine: "google",
+      }),
     });
 
     if (!res.ok) {
-      const errorText = await res.text();
-      console.error("[serp-check] Serper error:", res.status, errorText);
       return NextResponse.json({ error: `Serper error: ${res.status}` }, { status: 500 });
     }
 
     const data = await res.json();
-    console.log("[serp-check] Query:", query, "Results:", (data.organic || []).length, "First:", (data.organic?.[0]?.title || "none"));
-    const rawOrganic = (data.organic || []) as {
+    const organic = (data.organic || []) as {
       position?: number;
       link?: string;
       domain?: string;
@@ -67,37 +70,19 @@ export async function POST(request: NextRequest) {
       snippet?: string;
     }[];
 
-    // Filter out social media / non-website results
-    const socialDomains = [
-      "instagram.com", "youtube.com", "tiktok.com", "facebook.com",
-      "twitter.com", "x.com", "pinterest.com", "linkedin.com",
-      "reddit.com", "quora.com",
-    ];
-
-    const organic = rawOrganic.filter((r) => {
-      const domain = normalizeDomain(r.link || "");
-      return !socialDomains.some((sd) => domain.includes(sd));
-    });
-
-    // Re-number positions after filtering
-    const renumbered = organic.map((r, i) => ({ ...r, position: i + 1 }));
-
     const targetDomain = normalizeDomain(targetUrl);
-    const targetNorm = targetUrl.replace(/\/$/, "").toLowerCase();
+    const targetNorm = normalizeUrl(targetUrl);
 
-    // Build top 10 for display (filtered, only real websites)
-    const top10 = renumbered.slice(0, 10).map((r) => ({
-      position: r.position,
+    // Build top 10 for display
+    const top10 = organic.slice(0, 10).map((r) => ({
+      position: r.position || 0,
       domain: r.domain || normalizeDomain(r.link || ""),
       title: r.title || "",
       url: r.link || "",
     }));
 
-    // Find exact URL match
-    const exactMatch = renumbered.find((r) => {
-      const link = (r.link || "").replace(/\/$/, "").toLowerCase();
-      return link === targetNorm;
-    });
+    // 1. Exact URL match (ignoring query params)
+    const exactMatch = organic.find((r) => normalizeUrl(r.link || "") === targetNorm);
 
     if (exactMatch) {
       return NextResponse.json({
@@ -109,8 +94,30 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Domain match — normalize both sides
-    const domainMatch = renumbered.find((r) => {
+    // 2. Path-contains match (target path is inside the result URL or vice versa)
+    const targetPath = new URL(targetUrl).pathname.replace(/\/$/, "").toLowerCase();
+    const pathMatch = organic.find((r) => {
+      try {
+        const rPath = new URL(r.link || "").pathname.replace(/\/$/, "").toLowerCase();
+        const rDomain = normalizeDomain(r.link || "");
+        return rDomain === targetDomain && (rPath === targetPath || rPath.startsWith(targetPath));
+      } catch {
+        return false;
+      }
+    });
+
+    if (pathMatch) {
+      return NextResponse.json({
+        position: pathMatch.position,
+        match: "path",
+        url: pathMatch.link,
+        title: pathMatch.title,
+        top10,
+      });
+    }
+
+    // 3. Domain match (any page from same domain)
+    const domainMatch = organic.find((r) => {
       const rDomain = normalizeDomain(r.link || "");
       return rDomain === targetDomain;
     });
@@ -125,31 +132,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Partial domain match
-    const partialMatch = renumbered.find((r) => {
-      const rDomain = normalizeDomain(r.link || "");
-      return rDomain.includes(targetDomain) || targetDomain.includes(rDomain);
-    });
-
-    if (partialMatch) {
-      return NextResponse.json({
-        position: partialMatch.position,
-        match: "partial",
-        url: partialMatch.link,
-        title: partialMatch.title,
-        top10,
-      });
-    }
-
     // Not found
     return NextResponse.json({
       position: null,
       match: null,
       top10,
-      debug: { querySent: query, totalRaw: rawOrganic.length, totalFiltered: organic.length },
     });
   } catch (error) {
-    console.error("[category-map/serp-check] Error:", error);
+    console.error("[serp-check] Error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
