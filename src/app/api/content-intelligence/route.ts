@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { parseSitemap } from "@/lib/sitemap/parser";
 import { getSearchAnalytics, getGSCSites, matchDomainToGSCSite, getDateRange } from "@/lib/gsc-client";
-import { analyzeWithAI } from "@/lib/ai-client";
+import Anthropic from "@anthropic-ai/sdk";
 import type { SitemapUrl } from "@/types/category-map";
 
 function filterBlogUrls(urls: SitemapUrl[]): SitemapUrl[] {
@@ -55,8 +55,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Nenhuma URL de conteúdo encontrada" }, { status: 400 });
     }
 
-    // Limit to 100 URLs to avoid timeout
-    const limitedUrls = blogUrls.slice(0, 100);
+    // Limit to 50 URLs to avoid timeout
+    const limitedUrls = blogUrls.slice(0, 50);
 
     // Try to get GSC data
     const session = await auth().catch(() => null);
@@ -192,7 +192,13 @@ FORMATO JSON OBRIGATÓRIO:
 
 Responda APENAS com JSON válido. Sem markdown, sem explicação fora do JSON.`;
 
-    const aiResponse = await analyzeWithAI(prompt);
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 16000,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const aiResponse = (message.content.find((b) => b.type === "text") as { text: string })?.text ?? "";
 
     // Parse AI response
     let analysis;
