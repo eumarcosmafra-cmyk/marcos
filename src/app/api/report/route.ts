@@ -1,3 +1,4 @@
+import { requireAuth, isAuthError } from "@/lib/require-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeWithAI } from "@/lib/ai-client";
 import { isDemoMode, MOCK_REPORT } from "@/lib/mock-data";

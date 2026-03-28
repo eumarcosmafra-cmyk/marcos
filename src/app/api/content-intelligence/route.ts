@@ -32,7 +32,7 @@ interface RawCluster {
   central_entity: string;
   satellite_target: number;
   layers: ClusterLayer;
-  score: "strong" | "medium" | "weak_real" | "critical_gap";
+  score: "strong" | "medium" | "weak_real" | "no_data" | "critical_gap";
   score_reasoning: string;
   geo_score: "high" | "medium" | "low";
   geo_recommendation: string;

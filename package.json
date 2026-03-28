@@ -10,10 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^1.1.0",
-    "@anthropic-ai/sdk": "^0.39.0",
     "@prisma/client": "^6.19.2",
-    "ai": "^4.1.0",
     "autoprefixer": "^10.4.27",
     "clsx": "^2.1.1",
     "googleapis": "^171.4.0",

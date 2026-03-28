@@ -1,3 +1,4 @@
+import { requireAuth, isAuthError } from "@/lib/require-auth";
 import { NextResponse } from "next/server";
 import { clientRepository } from "@/repositories/client-repository";
 

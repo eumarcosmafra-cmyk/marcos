@@ -1,3 +1,4 @@
+import { requireAuth, isAuthError } from "@/lib/require-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { alertRepository } from "@/repositories/alert-repository";
 import type { AlertSeverity, AlertStatus, AlertType } from "@prisma/client";

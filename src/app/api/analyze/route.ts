@@ -1,3 +1,4 @@
+import { requireAuth, isAuthError } from "@/lib/require-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { chatWithAnalyst } from "@/lib/ai-client";
 import { isDemoMode, getMockChatResponse } from "@/lib/mock-data";

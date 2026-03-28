@@ -1,3 +1,4 @@
+import { requireAuth, isAuthError } from "@/lib/require-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { categoryWatchRepository } from "@/repositories/category-watch-repository";
 

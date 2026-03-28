@@ -1,3 +1,4 @@
+import { requireAuth, isAuthError } from "@/lib/require-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { trackedQueryRepository } from "@/repositories/tracked-query-repository";

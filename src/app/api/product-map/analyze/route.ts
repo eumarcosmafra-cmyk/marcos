@@ -1,30 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { requireAuth, isAuthError } from "@/lib/require-auth";
+import { callGemini, parseGeminiJSON } from "@/lib/gemini";
 
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) return authResult;
+
     const { categories } = await request.json();
     if (!categories?.length) {
       return NextResponse.json({ error: "No categories to analyze" }, { status: 400 });
     }
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-    const summary = categories.map((c: any) =>
+    const summary = categories.map((c: { category_name: string; abc_tier: string; revenue: number; product_count: number; category_position: number | null; quadrant: string }) =>
       `${c.category_name} (${c.abc_tier}): R$${c.revenue.toLocaleString('pt-BR')}, ${c.product_count} prods, pos ${c.category_position || 'N/A'}, quadrant: ${c.quadrant}`
     ).join('\n');
 
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4000,
-      messages: [{
-        role: "user",
-        content: `Você é um estrategista de SEO para e-commerce. Analise estes dados de categorias e retorne diagnóstico em português.
+    const rawText = await callGemini({
+      systemPrompt: "You are an ecommerce SEO strategist. Return valid JSON only.",
+      userPrompt: `Analise estes dados de categorias e retorne diagnóstico em português.
 
 DADOS:
 ${summary}
 
-JSON obrigatório:
+JSON:
 {
   "executive_summary": "2-3 frases sobre a situação geral",
   "biggest_opportunity": "maior oportunidade de receita",
@@ -34,16 +33,12 @@ JSON obrigatório:
   ],
   "content_gap_summary": "estado do blog vs catálogo comercial",
   "abc_visibility_summary": "estado do ABC vs visibilidade orgânica"
-}
-
-Retorne APENAS JSON válido.`
-      }],
+}`,
+      maxOutputTokens: 4000,
+      temperature: 0.2,
     });
 
-    const text = (message.content.find((b) => b.type === "text") as { text: string })?.text ?? "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const diagnosis = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-
+    const diagnosis = parseGeminiJSON(rawText);
     return NextResponse.json({ diagnosis });
   } catch (error) {
     console.error("[product-map/analyze] Error:", error);
