@@ -232,6 +232,12 @@ APENAS JSON.`,
         temperature: 0.2,
       });
 
+      // Debug logging
+      console.error("[CI-DEBUG] Raw response length:", rawText.length);
+      console.error("[CI-DEBUG] First 500 chars:", rawText.slice(0, 500));
+      console.error("[CI-DEBUG] Last 200 chars:", rawText.slice(-200));
+      console.error("[CI-DEBUG] responseMimeType active:", true);
+
       // Check for truncated response
       const trimmed = rawText.trim();
       if (!trimmed.endsWith("}") && !trimmed.endsWith("]")) {
