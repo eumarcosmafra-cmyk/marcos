@@ -99,24 +99,27 @@ async function analyzeBatch(urls: UrlData[], batchIndex: number, totalBatches: n
     return `${u.title} | ${u.url} | ${topQ} | ${u.totalImpressions}imp ${u.totalClicks}cli`;
   }).join("\n");
 
-  const prompt = `Classifique estas ${urls.length} URLs em clusters temáticos SEO (batch ${batchIndex + 1}/${totalBatches}).
+  const prompt = `Classifique estas ${urls.length} URLs em clusters temáticos SEO.
 
 URLS:
 ${urlSummaries}
 
-Para cada URL, retorne apenas a classificação. JSON:
+Para cada URL retorne a classificação. IMPORTANTE: agrupe por tema semântico amplo, NÃO fragmente em micro-clusters.
+Se dois temas compartilham a mesma entidade central, AGRUPE-OS.
+
+JSON:
 {
   "classificacoes": [
     { "url": "string", "title": "string", "cluster": "string", "entidade": "string", "intencao": "informacional|comercial|transacional", "impressoes": number, "cliques": number }
   ]
 }
 
-Regras: agrupar por tema semântico, entidade = conceito central, evitar clusters genéricos. APENAS JSON.`;
+APENAS JSON.`;
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const message = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 4000,
+    max_tokens: 8000,
     messages: [{ role: "user", content: prompt }],
   });
   return (message.content.find((b) => b.type === "text") as { text: string })?.text ?? "";
@@ -146,30 +149,114 @@ async function mergeAndAnalyze(allClassifications: { url: string; title: string;
     cliques: d.cliques,
   }));
 
-  const prompt = `Dado estes ${clusterList.length} clusters de conteúdo SEO já classificados, gere diagnóstico.
+  const prompt = `You are a senior SEO strategist analyzing blog content coverage for an e-commerce brand.
 
+Given these pre-grouped clusters, generate a complete strategic analysis.
+
+CLUSTERS:
 ${JSON.stringify(clusterList)}
 
-Para cada cluster: score (forte/medio/fraco), cobertura (atual/ideal/gap), diagnóstico curto, e 2-3 oportunidades de conteúdo.
-Priorizar do mais crítico.
+For EACH cluster return:
+1. cluster_name: string
+2. cluster_type: "broad_pillar" | "medium" | "long_tail" | "seasonal"
+3. central_entity: string
+4. satellite_target: number (dynamic: broad=8-15, medium=4-8, long_tail=1-3, seasonal=2-4)
+5. layers:
+   - category_url: string|null (matching transactional category page if identifiable)
+   - pillar_url: string|null (existing comprehensive blog post)
+   - pillar_status: "exists"|"missing"|"weak"
+   - satellite_urls: string[] (existing satellite URLs)
+   - missing_satellites: string[] (specific suggested titles, max 5)
+6. score: "strong"|"medium"|"weak_real"|"no_data"|"critical_gap"
+   - strong: coverage >=70% + impressions >500
+   - medium: coverage 40-69% OR impressions 50-500
+   - weak_real: has data but impressions <50 or CTR <1%
+   - no_data: no GSC data available
+   - critical_gap: AI identified topic but ZERO URLs exist
+7. score_reasoning: one sentence explaining the score
+8. geo_score: "high"|"medium"|"low" (based on content structure, FAQ presence, answer format)
+9. geo_recommendation: specific actionable improvement for AI citability
+10. gsc_impressions: total impressions
+11. gsc_clicks: total clicks
+12. internal_links_to_category: boolean
+13. merge_candidates: string[] (other cluster names this should merge with)
 
-JSON:
-{"clusters":[{"nome_cluster":"","entidade_principal":"","score":"forte|medio|fraco","total_urls":0,"urls":[{"url":"","title":"","tipo_intencao":""}],"metricas":{"impressoes":0,"cliques":0,"ctr_medio":0},"cobertura":{"atual":0,"ideal":0,"gap":0},"diagnostico":"","oportunidades":[""]}],"priorizacao":[{"cluster":"","motivo":""}],"resumo":{"total_urls":${allClassifications.length},"total_clusters":${clusterList.length},"clusters_fortes":0,"clusters_medios":0,"clusters_fracos":0}}
+ALSO generate:
+- executive_summary: 2-3 sentence strategic diagnosis (where strong, biggest gap, top action)
+- priority_queue: top 5 clusters by opportunity, each with: cluster name, reason, action ("Criar pillar"|"Expandir"|"Otimizar GEO"|"Corrigir links"|"Criar do zero")
 
-APENAS JSON.`;
+RULES:
+- MERGE clusters sharing same entity + >60% intent overlap. Max 45-55 real clusters.
+- satellite_target is DYNAMIC by type, not fixed at 5.
+- missing_satellites must be SPECIFIC titles, not generic.
+- Sort by opportunity (commercial gaps first).
+
+JSON format:
+{
+  "clusters": [...],
+  "executive_summary": "string",
+  "priority_queue": [{"cluster":"","reason":"","action":""}]
+}
+
+ONLY valid JSON.`;
 
   console.log("[content-intelligence] Merge prompt length:", prompt.length, "clusters:", clusterList.length);
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const message = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 8000,
+    max_tokens: 12000,
     messages: [{ role: "user", content: prompt }],
   });
 
   const text = (message.content.find((b) => b.type === "text") as { text: string })?.text ?? "";
   console.log("[content-intelligence] Merge response length:", text.length, "stop_reason:", message.stop_reason);
   return text;
+}
+
+// Semantic merge: combine clusters that reference each other in merge_candidates
+function semanticMerge(clusters: any[]): any[] {
+  const merged = new Map<string, any>();
+  const mergeMap = new Map<string, string>(); // child -> parent
+
+  for (const c of clusters) {
+    if (c.merge_candidates?.length > 0) {
+      for (const candidate of c.merge_candidates) {
+        const existing = clusters.find((x: any) => x.cluster_name === candidate);
+        if (existing && !mergeMap.has(c.cluster_name)) {
+          mergeMap.set(candidate, c.cluster_name);
+        }
+      }
+    }
+  }
+
+  for (const c of clusters) {
+    const parent = mergeMap.get(c.cluster_name);
+    if (parent && merged.has(parent)) {
+      const p = merged.get(parent);
+      p.gsc_impressions += c.gsc_impressions || 0;
+      p.gsc_clicks += c.gsc_clicks || 0;
+      if (c.layers?.satellite_urls) p.layers.satellite_urls.push(...c.layers.satellite_urls);
+      if (!p.merged_from) p.merged_from = [];
+      p.merged_from.push(c.cluster_name);
+    } else {
+      merged.set(c.cluster_name, { ...c });
+    }
+  }
+
+  return Array.from(merged.values());
+}
+
+// Calculate opportunity score
+function calculateOpportunityScore(c: any): number {
+  const impressions = c.gsc_impressions || 0;
+  const commercialWeight = c.layers?.category_url ? 1.5 : 1.0;
+  const existing = (c.layers?.satellite_urls?.length || 0) + (c.layers?.pillar_url ? 1 : 0);
+  const target = c.satellite_target || 5;
+  const coverageRatio = Math.max(0.1, existing / target);
+  const pillarFactor = c.layers?.pillar_status === 'missing' ? 2.0 : c.layers?.pillar_status === 'weak' ? 1.5 : 1.0;
+  const geoMult = c.geo_score === 'low' && impressions > 10000 ? 1.3 : 1.0;
+  return Math.round((impressions * commercialWeight) / coverageRatio * pillarFactor * geoMult);
 }
 
 export async function POST(request: NextRequest) {
@@ -246,30 +333,104 @@ export async function POST(request: NextRequest) {
         analysis = {
           clusters: Object.entries(clusterMap).map(([name, d]) => ({
             nome_cluster: name,
+            cluster_type: "medium" as const,
             entidade_principal: d.entidade,
-            score: d.impressoes > 1000 ? "forte" : d.impressoes > 100 ? "medio" : "fraco",
-            total_urls: d.urls.length,
+            satellite_target: 5,
+            layers: {
+              category_url: null,
+              pillar_url: null,
+              pillar_status: "missing" as const,
+              satellite_urls: d.urls.map(u => u.url),
+              missing_satellites: [],
+            },
+            score: d.impressoes > 500 ? "strong" as const : d.impressoes > 50 ? "medium" as const : d.impressoes > 0 ? "weak_real" as const : "no_data" as const,
+            score_reasoning: d.impressoes > 500 ? "Cluster com boa tração" : "Cluster com cobertura limitada",
+            geo_score: "medium" as const,
+            geo_recommendation: "Adicionar FAQ e formatar respostas para AI",
+            gsc_impressions: d.impressoes,
+            gsc_clicks: d.cliques,
+            internal_links_to_category: false,
+            merge_candidates: [],
             urls: d.urls,
+            total_urls: d.urls.length,
             metricas: { impressoes: d.impressoes, cliques: d.cliques, ctr_medio: d.impressoes > 0 ? d.cliques / d.impressoes : 0 },
             cobertura: { atual: d.urls.length, ideal: Math.max(d.urls.length + 2, 5), gap: Math.max(0, 5 - d.urls.length) },
-            diagnostico: d.impressoes > 1000 ? "Cluster com boa tração" : "Cluster com cobertura limitada",
+            diagnostico: d.impressoes > 500 ? "Cluster com boa tração" : "Cluster com cobertura limitada",
             oportunidades: ["Expandir cobertura com mais conteúdos"],
           })),
-          priorizacao: Object.entries(clusterMap)
+          executive_summary: "Análise gerada via fallback. Verifique a cobertura dos clusters e priorize os gaps críticos.",
+          priority_queue: Object.entries(clusterMap)
             .sort((a, b) => a[1].impressoes - b[1].impressoes)
-            .map(([name]) => ({ cluster: name, motivo: "Baixa cobertura ou tração" })),
+            .slice(0, 5)
+            .map(([name]) => ({ cluster: name, reason: "Baixa cobertura ou tração", action: "Expandir" })),
           resumo: {
             total_urls: classifications.length,
             total_clusters: Object.keys(clusterMap).length,
-            clusters_fortes: 0,
-            clusters_medios: 0,
-            clusters_fracos: 0,
+            critical_gaps: 0,
+            overall_geo: "medium",
           },
         };
-        const scores = analysis.clusters.map((c: { score: string }) => c.score);
-        analysis.resumo.clusters_fortes = scores.filter((s: string) => s === "forte").length;
-        analysis.resumo.clusters_medios = scores.filter((s: string) => s === "medio").length;
-        analysis.resumo.clusters_fracos = scores.filter((s: string) => s === "fraco").length;
+      } else {
+        // Post-processing: normalize AI response to our expected format
+        let clusters = analysis.clusters || [];
+
+        // Map AI field names (cluster_name/central_entity) to our internal names
+        clusters = clusters.map((c: any) => ({
+          ...c,
+          nome_cluster: c.cluster_name || c.nome_cluster || "Sem nome",
+          entidade_principal: c.central_entity || c.entidade_principal || "",
+        }));
+
+        // 1. Run semantic merge
+        clusters = semanticMerge(clusters);
+
+        // 2. Calculate opportunity_score for each
+        for (const c of clusters) {
+          c.opportunity_score = calculateOpportunityScore(c);
+        }
+
+        // 3. Sort by opportunity_score descending
+        clusters.sort((a: any, b: any) => (b.opportunity_score || 0) - (a.opportunity_score || 0));
+
+        // 4. Separate no_data clusters into to_validate
+        const toValidate = clusters.filter((c: any) => c.score === "no_data");
+        const mainClusters = clusters.filter((c: any) => c.score !== "no_data");
+
+        // Add computed fields for frontend compatibility
+        for (const c of [...mainClusters, ...toValidate]) {
+          const satelliteCount = c.layers?.satellite_urls?.length || 0;
+          const target = c.satellite_target || 5;
+          c.total_urls = satelliteCount + (c.layers?.pillar_url ? 1 : 0);
+          c.cobertura = {
+            atual: satelliteCount,
+            ideal: target,
+            gap: Math.max(0, target - satelliteCount),
+          };
+          c.metricas = {
+            impressoes: c.gsc_impressions || 0,
+            cliques: c.gsc_clicks || 0,
+            ctr_medio: (c.gsc_impressions || 0) > 0 ? (c.gsc_clicks || 0) / (c.gsc_impressions || 0) : 0,
+          };
+        }
+
+        analysis.clusters = mainClusters;
+        analysis.to_validate = toValidate;
+
+        // Build resumo
+        const allClusters = [...mainClusters, ...toValidate];
+        analysis.resumo = {
+          total_urls: classifications.length,
+          total_clusters: allClusters.length,
+          critical_gaps: allClusters.filter((c: any) => c.score === "critical_gap").length,
+          overall_geo: (() => {
+            const geoScores = allClusters.map((c: any) => c.geo_score);
+            const highCount = geoScores.filter((g: string) => g === "high").length;
+            if (highCount > allClusters.length * 0.5) return "high";
+            const lowCount = geoScores.filter((g: string) => g === "low").length;
+            if (lowCount > allClusters.length * 0.5) return "low";
+            return "medium";
+          })(),
+        };
       }
 
       return NextResponse.json({
