@@ -59,7 +59,7 @@ export default function SettingsPage() {
         </h3>
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs text-white/40">Anthropic API Key</label>
+            <label className="mb-1 block text-xs text-white/40">Gemini API Key</label>
             <div className="flex gap-2">
               <input
                 type={showKey ? "text" : "password"}

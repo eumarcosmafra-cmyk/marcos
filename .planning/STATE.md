@@ -7,34 +7,28 @@ Fase: Estabilização e fixes críticos
 Data última atualização: 2026-03-28
 
 ## O que foi feito
-- Content Intelligence v1 implementado (sitemap + GSC + Claude AI clustering)
-- Content Intelligence v2 (5-state scores, merge, opportunity score, priority queue)
-- Content Intelligence v3 API (GSC-first, Gemini, gap detection) — frontend pendente
-- Category Map implementado (sitemap + GSC enrichment + position groups)
-- Product Map v1 implementado (sitemap + GSC)
-- Monitor de categorias (SERP + GSC position tracking)
-- Decisão: migrar Anthropic → Gemini 2.5 Flash (40× mais barato)
-- lib/gemini.ts criado
-- API content-intelligence reescrita com Gemini
+- Auth guard aplicado em 17 rotas de API
+- Migração Anthropic → Gemini 2.5 Flash (ai-client.ts, gemini.ts)
+- Content Intelligence v3 (GSC-first, batches, Gemini)
+- Category Map com agrupamento por posição
+- Product Map básico com sitemap + GSC
+- CLAUDE.md e settings.json criados
 
-## Próximos passos (em ordem)
-1. ✅ CLAUDE.md + STATE.md + settings.json
-2. require-auth.ts em todas as rotas
-3. Migração Gemini completa (ai-client.ts + todas as rotas)
-4. Remover @anthropic-ai/sdk do package.json
-5. Corrigir silent catches
-6. Criar tipos TypeScript para respostas de IA
-7. Content Intelligence v3 frontend (4 zonas, GSC-first)
-8. Product Map v2 (CSV upload, quadrants, 3 modos) — em 4 commits
+## Próximos passos
+1. Corrigir silent catches
+2. Criar tipos TypeScript para responses de IA
+3. Content Intelligence frontend v3 (4 zonas)
+4. Product Map v2 (CSV upload, quadrantes, 3 modos)
+5. Arquitetura multi-tenant
 
 ## Variáveis de ambiente
 ```
-GEMINI_API_KEY=          ← já configurada no Vercel
-GOOGLE_CLIENT_ID=        ← já configurado
-GOOGLE_CLIENT_SECRET=    ← já configurado
-AUTH_SECRET=             ← já configurado
-DATABASE_URL=            ← já configurado
-DIRECT_URL=              ← já configurado
-SERP_API_KEY=            ← já configurado
-CRON_SECRET=             ← já configurado
+GEMINI_API_KEY=          ← configurado
+GOOGLE_CLIENT_ID=        ← configurado
+GOOGLE_CLIENT_SECRET=    ← configurado
+AUTH_SECRET=             ← configurado
+DATABASE_URL=            ← configurado
+DIRECT_URL=              ← configurado
+SERP_API_KEY=            ← configurado
+CRON_SECRET=             ← configurado
 ```
