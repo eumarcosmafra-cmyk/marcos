@@ -35,12 +35,22 @@ export async function callGemini(options: GeminiCallOptions): Promise<string> {
     }),
   });
 
+  // Read body as text first, then parse as JSON
+  const responseText = await response.text();
+
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API HTTP ${response.status}: ${errorText.slice(0, 300)}`);
+    console.error("[gemini] HTTP error:", response.status, responseText.slice(0, 300));
+    throw new Error(`Gemini API HTTP ${response.status}: ${responseText.slice(0, 300)}`);
   }
 
-  const data = await response.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let data: any;
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    console.error("[gemini] Response is not JSON. Status:", response.status, "Body:", responseText.slice(0, 300));
+    throw new Error(`Erro na API Gemini: ${responseText.slice(0, 200)}`);
+  }
 
   // Log full response structure for debugging
   console.error("[gemini] Response candidates:", data.candidates?.length ?? 0);
