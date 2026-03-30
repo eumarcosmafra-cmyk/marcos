@@ -250,9 +250,9 @@ APENAS JSON.`,
         .replace(/\t/g, " ")
         .trim();
 
-      let parsed: { classificacoes: unknown[] };
+      let parsed: Record<string, unknown>;
       try {
-        parsed = parseGeminiJSON<{ classificacoes: unknown[] }>(sanitized);
+        parsed = parseGeminiJSON<Record<string, unknown>>(sanitized);
       } catch (e) {
         if (e instanceof SyntaxError) {
           const match = e.message.match(/position (\d+)/);
@@ -263,10 +263,14 @@ APENAS JSON.`,
         throw e;
       }
 
+      // Flexible extraction — accept different field names
+      console.error("[CI] batch response keys:", Object.keys(parsed));
+      const classifications = (parsed.classificacoes || (Array.isArray(parsed) ? parsed : [])) as unknown[];
+
       return NextResponse.json({
         step: "batch_complete",
         batchIndex,
-        classifications: parsed.classificacoes || [],
+        classifications,
       });
     }
 
@@ -312,17 +316,34 @@ JSON: {"clusters":[...],"executive_summary":"","priority_queue":[{"cluster":"","
         temperature: 0.2,
       });
 
-      const parsed = parseGeminiJSON<{ clusters: RawCluster[]; executive_summary?: string; priority_queue?: { cluster: string; reason: string; action: string }[] }>(rawText);
+      const parsed = parseGeminiJSON<Record<string, unknown>>(rawText);
+
+      // Log response shape for debugging
+      console.error("[CI] merge response keys:", Object.keys(parsed));
+
+      // Flexible field extraction — accept different naming conventions
+      const rawClusters = (parsed.clusters || parsed.cluster_list || []) as RawCluster[];
+      const executiveSummary = (parsed.executive_summary || (parsed as { resumo?: { executive_summary?: string } }).resumo?.executive_summary || "") as string;
+      const priorityQueue = (parsed.priority_queue || parsed.fila_prioridade || []) as { cluster: string; reason: string; action: string }[];
+
+      console.error("[CI] merge extracted:", rawClusters.length, "clusters,", priorityQueue.length, "priority items");
 
       // Post-processing
-      let clusters = parsed.clusters || [];
-      clusters = semanticMerge(clusters);
+      let clusters = rawClusters;
+      try {
+        clusters = semanticMerge(clusters);
+      } catch (e) {
+        console.error("[CI] semantic merge failed, using raw clusters:", e);
+      }
 
       // Calculate opportunity scores
-      const scored = clusters.map(c => ({
-        ...c,
-        opportunity_score: calculateOpportunityScore(c),
-      }));
+      const scored = clusters.map(c => {
+        try {
+          return { ...c, opportunity_score: calculateOpportunityScore(c) };
+        } catch {
+          return { ...c, opportunity_score: 0 };
+        }
+      });
 
       // Sort and separate
       const active = scored.filter(c => c.score !== "no_data").sort((a, b) => (b.opportunity_score || 0) - (a.opportunity_score || 0));
@@ -345,8 +366,8 @@ JSON: {"clusters":[...],"executive_summary":"","priority_queue":[{"cluster":"","
         analysis: {
           clusters: active,
           to_validate: toValidate,
-          priority_queue: parsed.priority_queue || [],
-          executive_summary: parsed.executive_summary || "",
+          priority_queue: priorityQueue,
+          executive_summary: executiveSummary,
           resumo,
           gaps: gaps || { zeroVisibility: [], sitemapOrphans: [] },
         },
