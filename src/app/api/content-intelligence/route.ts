@@ -228,7 +228,7 @@ JSON:
 
 IMPORTANTE: Escape todas as aspas duplas dentro de valores string com \\. Nunca use quebras de linha dentro de valores string. Títulos de produtos devem ter aspas escapadas.
 APENAS JSON.`,
-        maxOutputTokens: 65536,
+        maxOutputTokens: 16000,
         temperature: 0.2,
       });
 
@@ -312,13 +312,15 @@ TAMBÉM gere:
 - priority_queue: top 5 clusters por oportunidade, cada com: cluster, reason, action (Criar pillar|Expandir|Otimizar GEO|Corrigir links|Criar do zero)
 
 JSON: {"clusters":[...],"executive_summary":"","priority_queue":[{"cluster":"","reason":"","action":""}]}`,
-        maxOutputTokens: 65536,
+        maxOutputTokens: 16000,
         temperature: 0.2,
       });
 
       const parsed = parseGeminiJSON<Record<string, unknown>>(rawText);
 
-      // Log response shape for debugging
+      // Log full response shape for debugging
+      console.error("[CI] merge raw keys:", Object.keys(parsed));
+      console.error("[CI] merge raw sample:", JSON.stringify(parsed).slice(0, 500));
       console.error("[CI] merge response keys:", Object.keys(parsed));
 
       // Flexible field extraction — accept different naming conventions
