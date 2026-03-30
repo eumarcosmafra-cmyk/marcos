@@ -228,7 +228,7 @@ JSON:
 
 IMPORTANTE: Escape todas as aspas duplas dentro de valores string com \\. Nunca use quebras de linha dentro de valores string. Títulos de produtos devem ter aspas escapadas.
 APENAS JSON.`,
-        maxOutputTokens: 16000,
+        maxOutputTokens: 65536,
         temperature: 0.2,
       });
 
@@ -312,7 +312,7 @@ TAMBÉM gere:
 - priority_queue: top 5 clusters por oportunidade, cada com: cluster, reason, action (Criar pillar|Expandir|Otimizar GEO|Corrigir links|Criar do zero)
 
 JSON: {"clusters":[...],"executive_summary":"","priority_queue":[{"cluster":"","reason":"","action":""}]}`,
-        maxOutputTokens: 8000,
+        maxOutputTokens: 65536,
         temperature: 0.2,
       });
 

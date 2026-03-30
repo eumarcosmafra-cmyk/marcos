@@ -9,10 +9,12 @@ interface GeminiCallOptions {
 }
 
 export async function callGemini(options: GeminiCallOptions): Promise<string> {
-  const { systemPrompt, userPrompt, maxOutputTokens = 4000, temperature = 0.2 } = options;
+  const { systemPrompt, userPrompt, maxOutputTokens = 8192, temperature = 0.2 } = options;
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY não configurada. Adicione a chave nas variáveis de ambiente.");
+
+  console.error("[gemini] Request: model=", GEMINI_MODEL, "maxOutputTokens=", maxOutputTokens, "promptLength=", userPrompt.length);
 
   const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
     method: "POST",
