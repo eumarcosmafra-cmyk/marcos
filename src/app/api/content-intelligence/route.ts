@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { parseSitemap } from "@/lib/sitemap/parser";
 import { getSearchAnalytics, getGSCSites, matchDomainToGSCSite, getDateRange } from "@/lib/gsc-client";
-import { callGemini, parseGeminiJSON } from "@/lib/gemini";
 import type { SitemapUrl } from "@/types/category-map";
 
 // ============================================================
@@ -12,84 +11,88 @@ import type { SitemapUrl } from "@/types/category-map";
 interface BlogUrl {
   url: string;
   title: string;
-  impressions: number;
-  clicks: number;
-  position: number;
+  totalImpressions: number;
+  totalClicks: number;
+  avgPosition: number;
   topQueries: { query: string; impressions: number; position: number }[];
 }
 
-interface ClusterLayer {
-  category_url: string | null;
-  pillar_url: string | null;
-  pillar_status: "exists" | "missing" | "weak";
-  satellite_urls: string[];
-  missing_satellites: string[];
-}
-
-interface RawCluster {
-  cluster_name: string;
-  cluster_type: "broad_pillar" | "medium" | "long_tail" | "seasonal";
-  central_entity: string;
-  satellite_target: number;
-  layers: ClusterLayer;
-  score: "strong" | "medium" | "weak_real" | "no_data" | "critical_gap";
-  score_reasoning: string;
-  geo_score: "high" | "medium" | "low";
-  geo_recommendation: string;
-  gsc_impressions: number;
-  gsc_clicks: number;
-  internal_links_to_category: boolean;
-  merge_candidates: string[];
-}
-
 // ============================================================
-// Semantic merge
+// Deterministic clustering by query keywords (no AI)
 // ============================================================
 
-function semanticMerge(clusters: RawCluster[]): (RawCluster & { merged_from?: string[]; opportunity_score?: number })[] {
-  const merged = new Map<string, RawCluster & { merged_from?: string[] }>();
-  const mergeMap = new Map<string, string>();
+const STOPWORDS_PT = new Set([
+  "de", "da", "do", "das", "dos", "a", "o", "as", "os", "e", "em", "um", "uma",
+  "para", "com", "por", "que", "se", "na", "no", "nas", "nos", "ao", "aos",
+  "como", "mais", "mas", "seu", "sua", "seus", "suas", "este", "esta", "isso",
+  "qual", "quando", "onde", "porque", "entre", "sobre", "após", "até",
+  "ter", "ser", "fazer", "pode", "tem", "vai", "vem", "dia", "ano",
+]);
 
-  for (const c of clusters) {
-    if (c.merge_candidates?.length > 0) {
-      for (const candidate of c.merge_candidates) {
-        if (clusters.find(x => x.cluster_name === candidate) && !mergeMap.has(c.cluster_name)) {
-          mergeMap.set(candidate, c.cluster_name);
-        }
+function extractKeywords(query: string): string[] {
+  return query
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/\s+/)
+    .filter((w) => w.length > 3 && !STOPWORDS_PT.has(w));
+}
+
+function clusterName(keywords: string[]): string {
+  return keywords
+    .slice(0, 3)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function groupIntoClusters(urls: BlogUrl[]) {
+  const clusters = new Map<string, BlogUrl[]>();
+
+  for (const url of urls) {
+    const topQuery = url.topQueries[0]?.query || "";
+    const keywords = extractKeywords(topQuery);
+
+    if (keywords.length === 0) {
+      const name = "Outros";
+      if (!clusters.has(name)) clusters.set(name, []);
+      clusters.get(name)!.push(url);
+      continue;
+    }
+
+    // Find existing cluster with >= 2 matching keywords
+    let matched = false;
+    for (const [clusterKey, members] of clusters) {
+      const clusterKeywords = extractKeywords(
+        members[0]?.topQueries[0]?.query || clusterKey
+      );
+      const overlap = keywords.filter((k) => clusterKeywords.includes(k));
+      if (overlap.length >= 2) {
+        members.push(url);
+        matched = true;
+        break;
       }
     }
-  }
 
-  for (const c of clusters) {
-    const parent = mergeMap.get(c.cluster_name);
-    if (parent && merged.has(parent)) {
-      const p = merged.get(parent)!;
-      p.gsc_impressions += c.gsc_impressions || 0;
-      p.gsc_clicks += c.gsc_clicks || 0;
-      if (c.layers?.satellite_urls) p.layers.satellite_urls.push(...c.layers.satellite_urls);
-      if (!p.merged_from) p.merged_from = [];
-      p.merged_from.push(c.cluster_name);
-    } else {
-      merged.set(c.cluster_name, { ...c });
+    if (!matched) {
+      const name = clusterName(keywords) || "Outros";
+      if (!clusters.has(name)) clusters.set(name, []);
+      clusters.get(name)!.push(url);
     }
   }
 
-  return Array.from(merged.values());
-}
-
-// ============================================================
-// Opportunity score
-// ============================================================
-
-function calculateOpportunityScore(c: RawCluster): number {
-  const impressions = c.gsc_impressions || 0;
-  const commercialWeight = c.layers?.category_url ? 1.5 : 1.0;
-  const existing = (c.layers?.satellite_urls?.length || 0) + (c.layers?.pillar_url ? 1 : 0);
-  const target = c.satellite_target || 5;
-  const coverageRatio = Math.max(0.1, existing / target);
-  const pillarFactor = c.layers?.pillar_status === "missing" ? 2.0 : c.layers?.pillar_status === "weak" ? 1.5 : 1.0;
-  const geoMult = c.geo_score === "low" && impressions > 10000 ? 1.3 : 1.0;
-  return Math.round((impressions * commercialWeight) / coverageRatio * pillarFactor * geoMult);
+  return Array.from(clusters.entries())
+    .map(([name, members]) => ({
+      name,
+      urls: members,
+      totalImpressions: members.reduce((s, u) => s + u.totalImpressions, 0),
+      totalClicks: members.reduce((s, u) => s + u.totalClicks, 0),
+      avgPosition:
+        members.length > 0
+          ? members.reduce((s, u) => s + (u.avgPosition || 0), 0) / members.length
+          : 0,
+      topUrl: members.sort((a, b) => b.totalImpressions - a.totalImpressions)[0],
+    }))
+    .sort((a, b) => b.totalImpressions - a.totalImpressions);
 }
 
 // ============================================================
@@ -105,7 +108,10 @@ export async function POST(request: NextRequest) {
     if (step === "scan" || !step) {
       const session = await auth().catch(() => null);
       if (!session?.accessToken) {
-        return NextResponse.json({ error: "Conecte o Google Search Console primeiro" }, { status: 401 });
+        return NextResponse.json(
+          { error: "Conecte o Google Search Console primeiro" },
+          { status: 401 }
+        );
       }
 
       let gscSiteUrl = siteUrl;
@@ -114,23 +120,35 @@ export async function POST(request: NextRequest) {
         if (sites.length > 0) gscSiteUrl = sites[0].siteUrl;
       }
       if (!gscSiteUrl) {
-        return NextResponse.json({ error: "Nenhum site encontrado no GSC" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Nenhum site encontrado no GSC" },
+          { status: 400 }
+        );
       }
 
       const { startDate, endDate } = getDateRange(period);
 
-      // Fetch all blog URLs from GSC
-      const rows = await getSearchAnalytics(session.accessToken, gscSiteUrl, {
+      const rows = (await getSearchAnalytics(session.accessToken, gscSiteUrl, {
         startDate,
         endDate,
         dimensions: ["query", "page"],
         rowLimit: 25000,
-      }) as { keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number }[];
+      })) as {
+        keys?: string[];
+        clicks?: number;
+        impressions?: number;
+        ctr?: number;
+        position?: number;
+      }[];
 
-      // Filter to blog URLs only
+      // Filter to blog URLs
       const blogRows = rows.filter((r) => {
         const page = r.keys?.[1] || "";
-        return page.includes("/blog/") || page.includes("/artigo/") || page.includes("/post/");
+        return (
+          page.includes("/blog/") ||
+          page.includes("/artigo/") ||
+          page.includes("/post/")
+        );
       });
 
       // Aggregate by page
@@ -142,255 +160,179 @@ export async function POST(request: NextRequest) {
           const slug = page.split("/").filter(Boolean).pop() || "";
           pageMap.set(page, {
             url: page,
-            title: slug.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
-            impressions: 0,
-            clicks: 0,
-            position: 0,
+            title: slug
+              .replace(/[-_]/g, " ")
+              .replace(/\b\w/g, (c) => c.toUpperCase()),
+            totalImpressions: 0,
+            totalClicks: 0,
+            avgPosition: 0,
             topQueries: [],
           });
         }
         const entry = pageMap.get(page)!;
-        entry.impressions += r.impressions || 0;
-        entry.clicks += r.clicks || 0;
-        entry.topQueries.push({ query, impressions: r.impressions || 0, position: r.position || 0 });
+        entry.totalImpressions += r.impressions || 0;
+        entry.totalClicks += r.clicks || 0;
+        entry.topQueries.push({
+          query,
+          impressions: r.impressions || 0,
+          position: r.position || 0,
+        });
       }
 
       // Calculate avg position per page
       for (const entry of pageMap.values()) {
         entry.topQueries.sort((a, b) => b.impressions - a.impressions);
         if (entry.topQueries.length > 0) {
-          entry.position = entry.topQueries[0].position;
+          entry.avgPosition = entry.topQueries[0].position;
         }
         entry.topQueries = entry.topQueries.slice(0, 5);
       }
 
       // Sort by impressions, take top N
-      const allBlogUrls = Array.from(pageMap.values())
-        .sort((a, b) => b.impressions - a.impressions);
+      const allBlogUrls = Array.from(pageMap.values()).sort(
+        (a, b) => b.totalImpressions - a.totalImpressions
+      );
       const topUrls = allBlogUrls.slice(0, Math.min(topN, 200));
 
       // Gap detection (if sitemap provided)
-      let gaps = { zeroVisibility: [] as string[], sitemapOrphans: [] as string[] };
+      const gaps = {
+        zeroVisibility: [] as string[],
+        sitemapOrphans: [] as string[],
+      };
       if (sitemapUrl) {
         try {
           const sitemapUrls = await parseSitemap(sitemapUrl);
           const sitemapBlogUrls = sitemapUrls
             .map((u: SitemapUrl) => u.loc)
-            .filter((url: string) => url.includes("/blog/") || url.includes("/artigo/") || url.includes("/post/"));
+            .filter(
+              (url: string) =>
+                url.includes("/blog/") ||
+                url.includes("/artigo/") ||
+                url.includes("/post/")
+            );
 
-          const gscUrlSet = new Set(allBlogUrls.map(u => u.url.replace(/\/$/, "").toLowerCase()));
-          const sitemapUrlSet = new Set(sitemapBlogUrls.map((u: string) => u.replace(/\/$/, "").toLowerCase()));
+          const gscUrlSet = new Set(
+            allBlogUrls.map((u) => u.url.replace(/\/$/, "").toLowerCase())
+          );
+          const sitemapUrlSet = new Set(
+            sitemapBlogUrls.map((u: string) =>
+              u.replace(/\/$/, "").toLowerCase()
+            )
+          );
 
-          gaps.zeroVisibility = [...sitemapUrlSet].filter(u => !gscUrlSet.has(u));
-          gaps.sitemapOrphans = [...gscUrlSet].filter(u => !sitemapUrlSet.has(u));
+          gaps.zeroVisibility = [...sitemapUrlSet].filter(
+            (u) => !gscUrlSet.has(u)
+          );
+          gaps.sitemapOrphans = [...gscUrlSet].filter(
+            (u) => !sitemapUrlSet.has(u)
+          );
         } catch (e) {
-          console.warn("[content-intelligence] Sitemap gap detection failed:", e);
+          console.error("[content-intelligence] Sitemap gap detection failed:", e);
         }
-      }
-
-      // Split into batches of 25
-      const batchSize = 25;
-      const batches: BlogUrl[][] = [];
-      for (let i = 0; i < topUrls.length; i += batchSize) {
-        batches.push(topUrls.slice(i, i + batchSize));
       }
 
       return NextResponse.json({
         step: "scan_complete",
         totalUrls: allBlogUrls.length,
         analyzingUrls: topUrls.length,
-        totalBatches: batches.length,
-        batches: batches.map((b, i) => ({ index: i, urls: b })),
+        urls: topUrls,
         gaps,
       });
     }
 
-    // ---- STEP 2: ANALYZE BATCH (Gemini) ----
-    if (step === "analyze_batch") {
-      const { urls, batchIndex, totalBatches } = body.batchData;
+    // ---- STEP 2: CLUSTER (deterministic, no AI) ----
+    if (step === "cluster") {
+      const { urls } = body as { urls: BlogUrl[] };
 
-      const urlSummaries = urls.map((u: BlogUrl) => {
-        const topQ = u.topQueries?.slice(0, 3).map((q: { query: string; impressions: number }) => `${q.query}(${q.impressions})`).join(", ") || "-";
-        return `${u.title} | ${u.url} | ${topQ} | ${u.impressions}imp ${u.clicks}cli`;
-      }).join("\n");
+      const clusters = groupIntoClusters(urls);
 
-      const rawText = await callGemini({
-        systemPrompt: "You are an SEO analyst. Respond with valid JSON only.",
-        userPrompt: `Classifique estas ${urls.length} URLs em clusters temáticos SEO (lote ${batchIndex + 1}/${totalBatches}).
-
-URLS:
-${urlSummaries}
-
-Agrupe por tema semântico amplo. NÃO fragmente em micro-clusters.
-
-JSON:
-{"classificacoes":[{"url":"string","title":"string","cluster":"string","entidade":"string","intencao":"informacional|comercial|transacional","impressoes":0,"cliques":0}]}
-
-IMPORTANTE: Escape todas as aspas duplas dentro de valores string com \\. Nunca use quebras de linha dentro de valores string. Títulos de produtos devem ter aspas escapadas.
-APENAS JSON.`,
-        maxOutputTokens: 16000,
-        temperature: 0.2,
-      });
-
-      // Debug logging
-      console.error("[CI-DEBUG] Raw response length:", rawText.length);
-      console.error("[CI-DEBUG] First 500 chars:", rawText.slice(0, 500));
-      console.error("[CI-DEBUG] Last 200 chars:", rawText.slice(-200));
-      console.error("[CI-DEBUG] responseMimeType active:", true);
-
-      // Check for truncated response
-      const trimmed = rawText.trim();
-      if (!trimmed.endsWith("}") && !trimmed.endsWith("]")) {
-        throw new Error("Resposta truncada — reduza o número de URLs no slider e tente novamente.");
-      }
-
-      // Sanitize control characters before parsing
-      const sanitized = rawText
-        .replace(/[\u0000-\u001F\u007F]/g, " ")
-        .replace(/\t/g, " ")
-        .trim();
-
-      let parsed: Record<string, unknown>;
-      try {
-        parsed = parseGeminiJSON<Record<string, unknown>>(sanitized);
-      } catch (e) {
-        if (e instanceof SyntaxError) {
-          const match = e.message.match(/position (\d+)/);
-          const pos = match ? parseInt(match[1]) : -1;
-          console.error("[content-intelligence] JSON SyntaxError at position", pos, "Raw:", rawText.slice(0, 200));
-          throw new Error("Resposta truncada ou malformada. Tente reduzir o número de URLs.");
-        }
-        throw e;
-      }
-
-      // Flexible extraction — accept different field names
-      console.error("[CI] batch response keys:", Object.keys(parsed));
-      const classifications = (parsed.classificacoes || (Array.isArray(parsed) ? parsed : [])) as unknown[];
-
-      return NextResponse.json({
-        step: "batch_complete",
-        batchIndex,
-        classifications,
-      });
-    }
-
-    // ---- STEP 3: MERGE + FINAL ANALYSIS (Gemini) ----
-    if (step === "merge") {
-      const { classifications, gaps } = body.batchData;
-
-      // Group by cluster
-      const clusterMap: Record<string, { entidade: string; urls: { url: string; title: string; intencao: string }[]; impressoes: number; cliques: number }> = {};
-      for (const c of classifications as { cluster: string; entidade: string; url: string; title: string; intencao: string; impressoes: number; cliques: number }[]) {
-        if (!clusterMap[c.cluster]) clusterMap[c.cluster] = { entidade: c.entidade, urls: [], impressoes: 0, cliques: 0 };
-        clusterMap[c.cluster].urls.push({ url: c.url, title: c.title, intencao: c.intencao });
-        clusterMap[c.cluster].impressoes += c.impressoes || 0;
-        clusterMap[c.cluster].cliques += c.cliques || 0;
-      }
-
-      const clusterList = Object.entries(clusterMap).map(([name, d]) => ({
-        nome: name, entidade: d.entidade, urls: d.urls, total_urls: d.urls.length,
-        impressoes: d.impressoes, cliques: d.cliques,
-      }));
-
-      const rawText = await callGemini({
-        systemPrompt: "You are a senior SEO strategist. Respond with valid JSON only.",
-        userPrompt: `Analise estes ${clusterList.length} clusters de blog e gere diagnóstico estratégico completo.
-
-CLUSTERS:
-${JSON.stringify(clusterList)}
-
-Para CADA cluster retorne:
-1. cluster_name, cluster_type (broad_pillar|medium|long_tail|seasonal), central_entity
-2. satellite_target (dinâmico: broad=8-15, medium=4-8, long_tail=1-3, seasonal=2-4)
-3. layers: { category_url, pillar_url, pillar_status (exists|missing|weak), satellite_urls, missing_satellites (títulos específicos, max 5) }
-4. score: strong|medium|weak_real|critical_gap
-5. score_reasoning, geo_score (high|medium|low), geo_recommendation (em português)
-6. gsc_impressions, gsc_clicks, internal_links_to_category, merge_candidates
-
-TAMBÉM gere:
-- executive_summary: 2-3 frases sobre situação geral (em português)
-- priority_queue: top 5 clusters por oportunidade, cada com: cluster, reason, action (Criar pillar|Expandir|Otimizar GEO|Corrigir links|Criar do zero)
-
-JSON: {"clusters":[...],"executive_summary":"","priority_queue":[{"cluster":"","reason":"","action":""}]}`,
-        maxOutputTokens: 16000,
-        temperature: 0.2,
-      });
-
-      const parsed = parseGeminiJSON<Record<string, unknown>>(rawText);
-
-      // Log full response shape for debugging
-      console.error("[CI] merge raw keys:", Object.keys(parsed));
-      console.error("[CI] merge raw sample:", JSON.stringify(parsed).slice(0, 500));
-      console.error("[CI] merge response keys:", Object.keys(parsed));
-
-      // Flexible field extraction — accept different naming conventions
-      const rawClusters = (parsed.clusters || parsed.cluster_list || []) as RawCluster[];
-      const executiveSummary = (parsed.executive_summary || (parsed as { resumo?: { executive_summary?: string } }).resumo?.executive_summary || "") as string;
-      const priorityQueue = (parsed.priority_queue || parsed.fila_prioridade || []) as { cluster: string; reason: string; action: string }[];
-
-      console.error("[CI] merge extracted:", rawClusters.length, "clusters,", priorityQueue.length, "priority items");
-
-      // Post-processing
-      let clusters = rawClusters;
-      try {
-        clusters = semanticMerge(clusters);
-      } catch (e) {
-        console.error("[CI] semantic merge failed, using raw clusters:", e);
-      }
-
-      // Calculate opportunity scores
-      const scored = clusters.map(c => {
-        try {
-          return { ...c, opportunity_score: calculateOpportunityScore(c) };
-        } catch {
-          return { ...c, opportunity_score: 0 };
-        }
-      });
-
-      // Sort and separate
-      const active = scored.filter(c => c.score !== "no_data").sort((a, b) => (b.opportunity_score || 0) - (a.opportunity_score || 0));
-      const toValidate = scored.filter(c => c.score === "no_data");
-
-      // Summary
-      const resumo = {
-        total_urls: classifications.length,
-        total_clusters: active.length,
-        critical_gaps: active.filter(c => c.score === "critical_gap").length,
-        overall_geo: active.length > 0
-          ? active.filter(c => c.geo_score === "high").length > active.length / 2 ? "high" : active.filter(c => c.geo_score === "low").length > active.length / 2 ? "low" : "medium"
-          : "N/A",
-        zero_visibility: gaps?.zeroVisibility?.length || 0,
-        sitemap_orphans: gaps?.sitemapOrphans?.length || 0,
+      const result = {
+        clusters: clusters.map((c) => ({
+          nome_cluster: c.name,
+          total_urls: c.urls.length,
+          gsc_impressions: c.totalImpressions,
+          gsc_clicks: c.totalClicks,
+          avg_position: Math.round(c.avgPosition * 10) / 10,
+          ctr:
+            c.totalImpressions > 0
+              ? Math.round((c.totalClicks / c.totalImpressions) * 1000) / 10
+              : 0,
+          top_url: c.topUrl?.url || "",
+          top_query: c.topUrl?.topQueries[0]?.query || "",
+          urls: c.urls.map((u) => ({
+            url: u.url,
+            title: u.title,
+            impressions: u.totalImpressions,
+            clicks: u.totalClicks,
+            position: u.avgPosition,
+            top_query: u.topQueries[0]?.query || "",
+          })),
+          score:
+            c.totalImpressions > 1000
+              ? "strong"
+              : c.totalImpressions > 100
+                ? "medium"
+                : "weak",
+        })),
+        resumo: {
+          total_urls: urls.length,
+          total_clusters: clusters.length,
+          total_impressions: urls.reduce((s, u) => s + u.totalImpressions, 0),
+          total_clicks: urls.reduce((s, u) => s + u.totalClicks, 0),
+        },
+        gaps: body.gaps || { zeroVisibility: [], sitemapOrphans: [] },
       };
 
-      return NextResponse.json({
-        step: "complete",
-        analysis: {
-          clusters: active,
-          to_validate: toValidate,
-          priority_queue: priorityQueue,
-          executive_summary: executiveSummary,
-          resumo,
-          gaps: gaps || { zeroVisibility: [], sitemapOrphans: [] },
-        },
-        analyzedAt: new Date().toISOString(),
-      });
+      return NextResponse.json({ step: "complete", analysis: result });
     }
+
+    /* AI_DISABLED — analyze_batch and merge steps
+     * These steps use Gemini AI for semantic clustering.
+     * Temporarily disabled due to API cost and instability.
+     * To re-enable: uncomment and remove the "cluster" step above.
+     *
+     * step: "analyze_batch" → calls callGemini for classification
+     * step: "merge" → calls callGemini for final diagnosis
+     */
 
     return NextResponse.json({ error: "Step inválido" }, { status: 400 });
   } catch (error) {
     console.error("[content-intelligence] Error:", error);
-    const message = error instanceof Error ? error.message : "Internal server error";
+    const message =
+      error instanceof Error ? error.message : "Internal server error";
 
-    // User-friendly error messages
     if (message.includes("GEMINI_API_KEY")) {
-      return NextResponse.json({ error: "GEMINI_API_KEY não configurada. Adicione a chave nas variáveis de ambiente do Vercel." }, { status: 400 });
+      return NextResponse.json(
+        {
+          error:
+            "GEMINI_API_KEY não configurada. Adicione a chave nas variáveis de ambiente do Vercel.",
+        },
+        { status: 400 }
+      );
+    }
+    if (message.includes("HTTP 429")) {
+      return NextResponse.json(
+        {
+          error:
+            "Limite de requisições atingido. Aguarde 1 minuto e tente novamente.",
+        },
+        { status: 400 }
+      );
+    }
+    if (message.includes("HTTP 401") || message.includes("HTTP 403")) {
+      return NextResponse.json(
+        {
+          error:
+            "Erro de autenticação com a API Gemini. Verifique sua chave.",
+        },
+        { status: 400 }
+      );
     }
     if (message.includes("HTTP 4")) {
-      return NextResponse.json({ error: "Erro de autenticação com a API Gemini. Verifique sua chave." }, { status: 400 });
-    }
-    if (message.includes("resposta vazia") || message.includes("SAFETY")) {
-      return NextResponse.json({ error: "A IA bloqueou a resposta. Tente reduzir o número de URLs." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Erro na API Gemini: " + message },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json({ error: message }, { status: 500 });
