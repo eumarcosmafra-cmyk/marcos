@@ -10,9 +10,10 @@ datasource db {
 
 model Client {
   id        String   @id @default(cuid())
-  name      String
-  domain    String   @unique
-  createdAt DateTime @default(now())
+  name           String
+  domain         String   @unique
+  ga4PropertyId  String?
+  createdAt      DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   categoryWatches      CategoryWatch[]
