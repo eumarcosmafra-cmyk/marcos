@@ -60,6 +60,7 @@ export interface Client {
   currentScore?: number;
   notes?: string;
   gscSiteUrl?: string;
+  ga4PropertyId?: string;
   indicators?: ClientIndicators;
 }
 

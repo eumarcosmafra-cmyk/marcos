@@ -328,6 +328,9 @@ export default function ClientDetailPage() {
 
       {mainTab === "results" && (
         <div className="space-y-6">
+          {/* GA4 Configuration */}
+          <GA4Config clientId={client.id} currentPropertyId={client.ga4PropertyId} />
+
           {/* Portal Access Management */}
           <div className="glass-card p-4 space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Acesso do Cliente ao Portal</h3>
@@ -452,6 +455,7 @@ export default function ClientDetailPage() {
           ) : (
             <ReportForm
               clientId={params.id as string}
+              clientDomain={client?.domain}
               onSaved={(report) => {
                 setReports(prev => [report, ...prev]);
                 setReportsTab("list");
@@ -694,5 +698,57 @@ function QuickAction({
       <span className="text-xs font-semibold text-white">{label}</span>
       <span className="text-[10px] text-white/30">{desc}</span>
     </Link>
+  );
+}
+
+function GA4Config({ clientId, currentPropertyId }: { clientId: string; currentPropertyId?: string | null }) {
+  const [propertyId, setPropertyId] = useState(currentPropertyId || "");
+  const [input, setInput] = useState("");
+  const [validating, setValidating] = useState(false);
+  const [status, setStatus] = useState<{ valid: boolean; name?: string; error?: string } | null>(null);
+
+  async function handleValidate() {
+    if (!input.trim()) return;
+    setValidating(true);
+    try {
+      const res = await fetch("/api/ga4/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ propertyId: input.trim(), clientId }),
+      });
+      const data = await res.json();
+      setStatus(data);
+      if (data.valid) setPropertyId(input.trim());
+    } catch (e) {
+      console.error("[GA4Config] Error:", e);
+      setStatus({ valid: false, error: "Erro ao validar." });
+    } finally {
+      setValidating(false);
+    }
+  }
+
+  return (
+    <div className="glass-card p-4 space-y-2">
+      <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Google Analytics 4</h3>
+      {propertyId ? (
+        <div className="flex items-center gap-3">
+          <span className="text-xs" style={{ color: "var(--text-primary)" }}>Conectado: <strong>{propertyId}</strong></span>
+          <button onClick={() => { setPropertyId(""); setStatus(null); }} className="text-[10px] text-brand-400 hover:underline">Alterar</button>
+        </div>
+      ) : (
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <label className="block text-[9px] font-medium uppercase mb-1" style={{ color: "var(--text-muted)" }}>Property ID</label>
+            <input value={input} onChange={e => setInput(e.target.value)} placeholder="123456789 ou properties/123456789"
+              className="w-full rounded-lg px-3 py-1.5 text-xs outline-none" style={{ background: "var(--glass-bg)", border: "1px solid var(--glass-border)", color: "var(--text-primary)" }} />
+          </div>
+          <button onClick={handleValidate} disabled={validating} className="btn-primary px-3 py-1.5 text-[10px] disabled:opacity-50">
+            {validating ? "..." : "Conectar"}
+          </button>
+        </div>
+      )}
+      {status && !status.valid && <p className="text-[10px] text-red-400">{status.error}</p>}
+      {status?.valid && <p className="text-[10px] text-emerald-400">Conectado: {status.name}</p>}
+    </div>
   );
 }

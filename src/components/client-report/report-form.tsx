@@ -6,6 +6,7 @@ import type { ClientReport, RankingWin, VisualKeyword, NextStep, FunnelData, AIP
 
 interface Props {
   clientId: string;
+  clientDomain?: string;
   onSaved: (report: ClientReport) => void;
   onCancel: () => void;
 }
@@ -48,7 +49,7 @@ function Input({ value, onChange, type = "text", placeholder }: { value: string 
   );
 }
 
-export function ReportForm({ clientId, onSaved, onCancel }: Props) {
+export function ReportForm({ clientId, clientDomain, onSaved, onCancel }: Props) {
   const [saving, setSaving] = useState(false);
   const [savedLink, setSavedLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -56,6 +57,9 @@ export function ReportForm({ clientId, onSaved, onCancel }: Props) {
   // Period
   const [period, setPeriod] = useState("");
   const [periodType, setPeriodType] = useState("trimestral");
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
+  const [autoFillStatus, setAutoFillStatus] = useState("");
 
   // Metrics
   const [clicks, setClicks] = useState(0);
@@ -84,6 +88,44 @@ export function ReportForm({ clientId, onSaved, onCancel }: Props) {
 
   // Notes
   const [notes, setNotes] = useState("");
+
+  async function handleFillGSC() {
+    if (!periodStart || !periodEnd || !clientDomain) { setAutoFillStatus("Defina datas e domínio primeiro."); return; }
+    setAutoFillStatus("Buscando dados do GSC...");
+    try {
+      const days = Math.round((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / 86400000);
+      const prevEnd = new Date(periodStart); prevEnd.setDate(prevEnd.getDate() - 1);
+      const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days);
+      const res = await fetch("/api/gsc/period-summary", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: clientDomain, currentPeriod: { startDate: periodStart, endDate: periodEnd }, previousPeriod: { startDate: prevStart.toISOString().split("T")[0], endDate: prevEnd.toISOString().split("T")[0] } }),
+      });
+      const data = await res.json();
+      if (data.error) { setAutoFillStatus(data.error); return; }
+      setClicks(data.current.clicks);
+      setClicksDelta(data.deltas.clicks);
+      setImpressions(data.current.impressions);
+      setImpressionsDelta(data.deltas.impressions);
+      setAutoFillStatus("GSC preenchido!");
+    } catch (e) { console.error("[report-form] GSC error:", e); setAutoFillStatus("Erro ao buscar GSC."); }
+  }
+
+  async function handleFillGA4() {
+    if (!periodStart || !periodEnd) { setAutoFillStatus("Defina as datas primeiro."); return; }
+    setAutoFillStatus("Buscando dados do GA4...");
+    try {
+      const res = await fetch("/api/ga4/ecommerce", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, currentPeriod: { startDate: periodStart, endDate: periodEnd } }),
+      });
+      const data = await res.json();
+      if (data.error) { setAutoFillStatus(data.error); return; }
+      setRevenue(Math.round(data.data.current.revenue));
+      setCartConversion(data.data.current.addedToCart > 0 ? Math.round((data.data.current.itemsPurchased / data.data.current.addedToCart) * 100) : 0);
+      setFunnel({ itemsViewed: data.data.current.itemsViewed, addedToCart: data.data.current.addedToCart, purchased: data.data.current.itemsPurchased });
+      setAutoFillStatus("GA4 preenchido!");
+    } catch (e) { console.error("[report-form] GA4 error:", e); setAutoFillStatus("Erro ao buscar GA4."); }
+  }
 
   async function handleSave() {
     if (!period.trim()) return;
@@ -164,7 +206,20 @@ export function ReportForm({ clientId, onSaved, onCancel }: Props) {
               <option value="trimestral">Trimestral</option>
             </select>
           </Field>
+          <Field label="Data início"><input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)} className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ background: "var(--glass-bg)", border: "1px solid var(--glass-border)", color: "var(--text-primary)" }} /></Field>
+          <Field label="Data fim"><input type="date" value={periodEnd} onChange={e => setPeriodEnd(e.target.value)} className="w-full rounded-lg px-3 py-2 text-xs outline-none" style={{ background: "var(--glass-bg)", border: "1px solid var(--glass-border)", color: "var(--text-primary)" }} /></Field>
         </div>
+        {periodStart && periodEnd && (
+          <div className="flex items-center gap-2 mt-3">
+            <button onClick={handleFillGSC} className="btn-secondary px-3 py-1.5 text-[10px] flex items-center gap-1">
+              Preencher com GSC ↗
+            </button>
+            <button onClick={handleFillGA4} className="btn-secondary px-3 py-1.5 text-[10px] flex items-center gap-1">
+              Preencher com GA4 ↗
+            </button>
+            {autoFillStatus && <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>{autoFillStatus}</span>}
+          </div>
+        )}
       </Section>
 
       {/* Main Metrics */}
