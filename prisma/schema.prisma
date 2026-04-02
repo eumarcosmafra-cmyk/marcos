@@ -19,6 +19,7 @@ model Client {
   alerts               Alert[]
   actionQueue          ActionQueue[]
   contentOpportunities ContentOpportunity[]
+  reports              ClientReport[]
 }
 
 model CategoryWatch {
@@ -245,4 +246,33 @@ model ContentOpportunity {
   @@unique([clientId, siteUrl, query])
   @@index([clientId, totalScore])
   @@index([status])
+}
+
+model ClientReport {
+  id        String   @id @default(cuid())
+  clientId  String
+  period    String
+  periodType String  @default("trimestral")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clicks           Int    @default(0)
+  clicksDelta      Float  @default(0)
+  impressions      Int    @default(0)
+  impressionsDelta Float  @default(0)
+  revenue          Float  @default(0)
+  cartConversion   Float  @default(0)
+  aiScore          Int    @default(0)
+  aiMentions       Int    @default(0)
+
+  funnelData      Json?
+  rankingWins     Json?
+  visualKeywords  Json?
+  aiPlatforms     Json?
+  nextSteps       Json?
+  analystNotes    String?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
 }
