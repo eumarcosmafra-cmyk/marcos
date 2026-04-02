@@ -20,6 +20,7 @@ model Client {
   actionQueue          ActionQueue[]
   contentOpportunities ContentOpportunity[]
   reports              ClientReport[]
+  clientUser           ClientUser?
 }
 
 model CategoryWatch {
@@ -272,7 +273,38 @@ model ClientReport {
   nextSteps       Json?
   analystNotes    String?
 
+  comments ReportComment[]
+
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId, createdAt])
+}
+
+model ClientUser {
+  id           String    @id @default(cuid())
+  clientId     String    @unique
+  email        String    @unique
+  passwordHash String
+  name         String?
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  client   Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  comments ReportComment[]
+
+  @@index([email])
+}
+
+model ReportComment {
+  id           String   @id @default(cuid())
+  reportId     String
+  clientUserId String
+  content      String
+  createdAt    DateTime @default(now())
+
+  report     ClientReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  clientUser ClientUser   @relation(fields: [clientUserId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
 }
