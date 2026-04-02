@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { ReportForm } from "@/components/client-report/report-form";
+import type { ClientReport } from "@/types/client-report";
 import {
   Globe,
   ArrowLeft,
@@ -33,7 +35,9 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true);
   const [gscSiteUrl, setGscSiteUrl] = useState<string>("");
   const [gscTab, setGscTab] = useState<"queries" | "pages">("queries");
-  const [mainTab, setMainTab] = useState<"overview" | "rankings">("overview");
+  const [mainTab, setMainTab] = useState<"overview" | "rankings" | "results">("overview");
+  const [reports, setReports] = useState<ClientReport[]>([]);
+  const [reportsTab, setReportsTab] = useState<"list" | "new">("list");
 
   useEffect(() => {
     async function loadClient() {
@@ -210,6 +214,22 @@ export default function ClientDetailPage() {
         >
           Ranking Categorias
         </button>
+        <button
+          onClick={() => {
+            setMainTab("results");
+            if (reports.length === 0) {
+              fetch(`/api/clients/${params.id}/reports`).then(r => r.json()).then(d => setReports(d.reports || [])).catch((e) => { console.error("[client-reports] Error:", e); });
+            }
+          }}
+          className={cn(
+            "px-4 py-2 text-sm font-medium transition-colors",
+            mainTab === "results"
+              ? "border-b-2 border-brand-500 text-brand-400"
+              : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+          )}
+        >
+          Painel do Cliente
+        </button>
       </div>
 
       {mainTab === "overview" && (
@@ -298,6 +318,67 @@ export default function ClientDetailPage() {
 
       {mainTab === "rankings" && (
         <RankingsTab clientId={client.id} />
+      )}
+
+      {mainTab === "results" && (
+        <div className="space-y-4">
+          {reportsTab === "list" ? (
+            <>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Painéis de resultado</h3>
+                <button onClick={() => setReportsTab("new")} className="btn-primary px-3 py-1.5 text-xs">+ Novo painel</button>
+              </div>
+              {reports.length === 0 ? (
+                <div className="glass-card flex flex-col items-center gap-2 p-8 text-center">
+                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>Nenhum painel criado ainda.</p>
+                  <button onClick={() => setReportsTab("new")} className="btn-primary px-4 py-2 text-xs mt-2">Criar primeiro painel</button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {reports.map(r => (
+                    <div key={r.id} className="glass-card flex items-center justify-between p-4">
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{r.period}</p>
+                        <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                          Criado em {new Date(r.createdAt).toLocaleDateString("pt-BR")} · {r.periodType}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`/clients/${params.id}/results/${r.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-primary px-3 py-1.5 text-[10px]"
+                        >
+                          Ver painel ↗
+                        </a>
+                        <button
+                          onClick={async () => {
+                            if (!confirm("Deletar este painel?")) return;
+                            await fetch(`/api/clients/${params.id}/reports/${r.id}`, { method: "DELETE" });
+                            setReports(prev => prev.filter(x => x.id !== r.id));
+                          }}
+                          className="rounded-lg px-2.5 py-1.5 text-[10px] text-red-400 hover:bg-red-600/10"
+                        >
+                          Deletar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <ReportForm
+              clientId={params.id as string}
+              onSaved={(report) => {
+                setReports(prev => [report, ...prev]);
+                setReportsTab("list");
+              }}
+              onCancel={() => setReportsTab("list")}
+            />
+          )}
+        </div>
       )}
     </div>
   );
