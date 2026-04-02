@@ -26,7 +26,7 @@ export function ConnectGSCButton() {
             </p>
           </div>
           <button
-            onClick={() => signIn("google")}
+            onClick={() => signIn("google", undefined, { prompt: "consent" })}
             className="btn-primary flex items-center gap-2 text-xs"
           >
             <LogIn className="h-3 w-3" />
@@ -51,11 +51,18 @@ export function ConnectGSCButton() {
             <p className="text-xs text-white/40">{session.user?.email}</p>
           </div>
           <button
+            onClick={() => signIn("google", undefined, { prompt: "consent" })}
+            className="btn-secondary flex items-center gap-2 text-xs"
+          >
+            <LogIn className="h-3 w-3" />
+            Reconectar GSC
+          </button>
+          <button
             onClick={() => signOut()}
             className="btn-secondary flex items-center gap-2 text-xs"
           >
             <LogOut className="h-3 w-3" />
-            Desconectar
+            Sair
           </button>
         </div>
       </div>
