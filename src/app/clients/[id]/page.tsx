@@ -38,6 +38,12 @@ export default function ClientDetailPage() {
   const [mainTab, setMainTab] = useState<"overview" | "rankings" | "results">("overview");
   const [reports, setReports] = useState<ClientReport[]>([]);
   const [reportsTab, setReportsTab] = useState<"list" | "new">("list");
+  const [portalAccess, setPortalAccess] = useState<{ id: string; email: string; name: string | null; lastLoginAt: string | null; createdAt: string } | null>(null);
+  const [portalLoaded, setPortalLoaded] = useState(false);
+  const [portalEmail, setPortalEmail] = useState("");
+  const [portalPassword, setPortalPassword] = useState("");
+  const [portalName, setPortalName] = useState("");
+  const [portalSaving, setPortalSaving] = useState(false);
 
   useEffect(() => {
     async function loadClient() {
@@ -321,7 +327,82 @@ export default function ClientDetailPage() {
       )}
 
       {mainTab === "results" && (
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* Portal Access Management */}
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Acesso do Cliente ao Portal</h3>
+            {!portalLoaded ? (
+              <button onClick={async () => {
+                const res = await fetch(`/api/clients/${params.id}/portal-access`);
+                const data = await res.json();
+                setPortalAccess(data.clientUser || null);
+                setPortalLoaded(true);
+              }} className="text-xs text-brand-400 hover:underline">Verificar acesso</button>
+            ) : portalAccess ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs" style={{ color: "var(--text-primary)" }}>Email: <strong>{portalAccess.email}</strong></p>
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                      Criado em {new Date(portalAccess.createdAt).toLocaleDateString("pt-BR")}
+                      {portalAccess.lastLoginAt && ` · Último acesso: ${new Date(portalAccess.lastLoginAt).toLocaleDateString("pt-BR")}`}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={async () => {
+                      const newPw = prompt("Nova senha:");
+                      if (!newPw) return;
+                      await fetch(`/api/clients/${params.id}/portal-access`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: newPw }) });
+                      alert("Senha redefinida!");
+                    }} className="text-[10px] text-yellow-400 hover:underline">Redefinir senha</button>
+                    <button onClick={async () => {
+                      if (!confirm("Revogar acesso do cliente ao portal?")) return;
+                      await fetch(`/api/clients/${params.id}/portal-access`, { method: "DELETE" });
+                      setPortalAccess(null);
+                    }} className="text-[10px] text-red-400 hover:underline">Revogar</button>
+                  </div>
+                </div>
+                <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                  Link do portal: <a href="/portal" target="_blank" className="text-brand-400">{typeof window !== "undefined" ? window.location.origin : ""}/portal</a>
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Cliente sem acesso ao portal. Crie credenciais abaixo.</p>
+                <div className="flex items-end gap-2">
+                  <div>
+                    <label className="block text-[9px] font-medium uppercase mb-1" style={{ color: "var(--text-muted)" }}>Email</label>
+                    <input value={portalEmail} onChange={e => setPortalEmail(e.target.value)} placeholder="cliente@empresa.com"
+                      className="rounded-lg px-2 py-1.5 text-xs outline-none" style={{ background: "var(--glass-bg)", border: "1px solid var(--glass-border)", color: "var(--text-primary)", width: "200px" }} />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-medium uppercase mb-1" style={{ color: "var(--text-muted)" }}>Senha</label>
+                    <input value={portalPassword} onChange={e => setPortalPassword(e.target.value)} type="password" placeholder="••••••"
+                      className="rounded-lg px-2 py-1.5 text-xs outline-none" style={{ background: "var(--glass-bg)", border: "1px solid var(--glass-border)", color: "var(--text-primary)", width: "140px" }} />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-medium uppercase mb-1" style={{ color: "var(--text-muted)" }}>Nome</label>
+                    <input value={portalName} onChange={e => setPortalName(e.target.value)} placeholder="Nome do cliente"
+                      className="rounded-lg px-2 py-1.5 text-xs outline-none" style={{ background: "var(--glass-bg)", border: "1px solid var(--glass-border)", color: "var(--text-primary)", width: "160px" }} />
+                  </div>
+                  <button disabled={portalSaving || !portalEmail || !portalPassword} onClick={async () => {
+                    setPortalSaving(true);
+                    try {
+                      const res = await fetch(`/api/clients/${params.id}/portal-access`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: portalEmail, password: portalPassword, name: portalName }) });
+                      const data = await res.json();
+                      if (data.error) { alert(data.error); return; }
+                      setPortalAccess(data.clientUser);
+                      setPortalEmail(""); setPortalPassword(""); setPortalName("");
+                    } catch (e) { console.error("[portal-access] Error:", e); } finally { setPortalSaving(false); }
+                  }} className="btn-primary px-3 py-1.5 text-[10px] disabled:opacity-50">
+                    {portalSaving ? "..." : "Criar acesso"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Reports list */}
           {reportsTab === "list" ? (
             <>
               <div className="flex items-center justify-between">
