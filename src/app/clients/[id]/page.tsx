@@ -24,6 +24,7 @@ import { LoadingSpinner } from "@/components/ui/loading";
 import { GSCOverviewCard } from "@/components/gsc/gsc-overview-card";
 import { TopQueriesTable } from "@/components/gsc/top-queries-table";
 import { TopPagesTable } from "@/components/gsc/top-pages-table";
+import { OrganicPagesGA4 } from "@/components/ga4/organic-pages";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 import type { Client } from "@/types/seo";
 import type { GSCSite } from "@/types/gsc";
@@ -288,6 +289,9 @@ export default function ClientDetailPage() {
               </p>
             </div>
           )}
+
+          {/* GA4 Organic Pages */}
+          {client?.ga4PropertyId && <OrganicPagesGA4 clientId={client.id} />}
 
           {/* Quick Actions */}
           <div>

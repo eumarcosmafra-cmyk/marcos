@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, Plus, Trash2, Copy, CheckCircle2 } from "lucide-react";
 import type { ClientReport, RankingWin, VisualKeyword, NextStep, FunnelData, AIPlatforms } from "@/types/client-report";
 
@@ -126,6 +126,13 @@ export function ReportForm({ clientId, clientDomain, onSaved, onCancel }: Props)
       setAutoFillStatus("GA4 preenchido!");
     } catch (e) { console.error("[report-form] GA4 error:", e); setAutoFillStatus("Erro ao buscar GA4."); }
   }
+
+  useEffect(() => {
+    if (!periodStart || !periodEnd) return;
+    if (clientDomain) handleFillGSC();
+    handleFillGA4();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodStart, periodEnd, clientDomain]);
 
   async function handleSave() {
     if (!period.trim()) return;
