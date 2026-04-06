@@ -112,9 +112,10 @@ export async function validateGA4Property(
     });
     return { valid: true, name: propertyId };
   } catch (error: unknown) {
+    console.error("[ga4-client] validateGA4Property error:", error);
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("403")) return { valid: false, error: "Sem permissão para acessar esta propriedade GA4." };
     if (message.includes("404")) return { valid: false, error: "Propriedade GA4 não encontrada." };
-    return { valid: false, error: "Erro ao validar propriedade GA4." };
+    return { valid: false, error: `Erro ao validar propriedade GA4: ${message}` };
   }
 }
