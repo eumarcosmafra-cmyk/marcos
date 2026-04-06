@@ -1,6 +1,7 @@
 "use client";
 
-import { Bell, Search } from "lucide-react";
+import { Bell, LogOut, Search } from "lucide-react";
+import { signOut } from "next-auth/react";
 
 export function Header() {
   return (
@@ -25,6 +26,13 @@ export function Header() {
             M
           </div>
         </div>
+        <button
+          onClick={() => signOut({ callbackUrl: "/" })}
+          title="Sair"
+          className="rounded-lg p-2 text-white/40 transition-colors hover:bg-white/5 hover:text-white"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
       </div>
     </header>
   );
