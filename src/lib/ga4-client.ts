@@ -102,9 +102,15 @@ export async function validateGA4Property(
 ): Promise<{ valid: boolean; name?: string; error?: string }> {
   try {
     const auth = getAuth(accessToken);
-    const analyticsadmin = google.analyticsadmin({ version: "v1beta", auth });
-    const response = await analyticsadmin.properties.get({ name: propertyId });
-    return { valid: true, name: response.data.displayName || propertyId };
+    const analyticsdata = google.analyticsdata({ version: "v1beta", auth });
+    await analyticsdata.properties.runReport({
+      property: propertyId,
+      requestBody: {
+        dateRanges: [{ startDate: "yesterday", endDate: "yesterday" }],
+        metrics: [{ name: "sessions" }],
+      },
+    });
+    return { valid: true, name: propertyId };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("403")) return { valid: false, error: "Sem permissão para acessar esta propriedade GA4." };
