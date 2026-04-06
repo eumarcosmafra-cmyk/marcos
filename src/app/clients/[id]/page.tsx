@@ -703,27 +703,43 @@ function QuickAction({
 
 function GA4Config({ clientId, currentPropertyId }: { clientId: string; currentPropertyId?: string | null }) {
   const [propertyId, setPropertyId] = useState(currentPropertyId || "");
-  const [input, setInput] = useState("");
-  const [validating, setValidating] = useState(false);
-  const [status, setStatus] = useState<{ valid: boolean; name?: string; error?: string } | null>(null);
+  const [properties, setProperties] = useState<{ id: string; displayName: string; account: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState("");
 
-  async function handleValidate() {
-    if (!input.trim()) return;
-    setValidating(true);
+  useEffect(() => {
+    if (propertyId) return;
+    setLoading(true);
+    fetch("/api/ga4/properties")
+      .then(r => r.json())
+      .then(d => {
+        if (d.properties) setProperties(d.properties);
+        else setError(d.error || "Erro ao carregar propriedades");
+      })
+      .catch(e => { console.error("[GA4Config] load error:", e); setError("Erro ao carregar propriedades"); })
+      .finally(() => setLoading(false));
+  }, [propertyId]);
+
+  async function handleSave() {
+    if (!selected) return;
+    setSaving(true);
+    setError(null);
     try {
       const res = await fetch("/api/ga4/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ propertyId: input.trim(), clientId }),
+        body: JSON.stringify({ propertyId: selected, clientId }),
       });
       const data = await res.json();
-      setStatus(data);
-      if (data.valid) setPropertyId(input.trim());
+      if (data.valid) setPropertyId(selected);
+      else setError(data.error || "Erro ao salvar");
     } catch (e) {
       console.error("[GA4Config] Error:", e);
-      setStatus({ valid: false, error: "Erro ao validar." });
+      setError("Erro ao salvar.");
     } finally {
-      setValidating(false);
+      setSaving(false);
     }
   }
 
@@ -733,22 +749,27 @@ function GA4Config({ clientId, currentPropertyId }: { clientId: string; currentP
       {propertyId ? (
         <div className="flex items-center gap-3">
           <span className="text-xs" style={{ color: "var(--text-primary)" }}>Conectado: <strong>{propertyId}</strong></span>
-          <button onClick={() => { setPropertyId(""); setStatus(null); }} className="text-[10px] text-brand-400 hover:underline">Alterar</button>
+          <button onClick={() => { setPropertyId(""); setError(null); setSelected(""); }} className="text-[10px] text-brand-400 hover:underline">Alterar</button>
         </div>
       ) : (
         <div className="flex items-end gap-2">
           <div className="flex-1">
-            <label className="block text-[9px] font-medium uppercase mb-1" style={{ color: "var(--text-muted)" }}>Property ID</label>
-            <input value={input} onChange={e => setInput(e.target.value)} placeholder="123456789 ou properties/123456789"
-              className="w-full rounded-lg px-3 py-1.5 text-xs outline-none" style={{ background: "var(--glass-bg)", border: "1px solid var(--glass-border)", color: "var(--text-primary)" }} />
+            <label className="block text-[9px] font-medium uppercase mb-1" style={{ color: "var(--text-muted)" }}>Propriedade</label>
+            <select value={selected} onChange={e => setSelected(e.target.value)} disabled={loading}
+              className="w-full rounded-lg px-3 py-1.5 text-xs outline-none"
+              style={{ background: "var(--glass-bg)", border: "1px solid var(--glass-border)", color: "var(--text-primary)" }}>
+              <option value="">{loading ? "Carregando..." : "Selecione uma propriedade"}</option>
+              {properties.map(p => (
+                <option key={p.id} value={p.id}>{p.account} — {p.displayName}</option>
+              ))}
+            </select>
           </div>
-          <button onClick={handleValidate} disabled={validating} className="btn-primary px-3 py-1.5 text-[10px] disabled:opacity-50">
-            {validating ? "..." : "Conectar"}
+          <button onClick={handleSave} disabled={saving || !selected} className="btn-primary px-3 py-1.5 text-[10px] disabled:opacity-50">
+            {saving ? "..." : "Conectar"}
           </button>
         </div>
       )}
-      {status && !status.valid && <p className="text-[10px] text-red-400">{status.error}</p>}
-      {status?.valid && <p className="text-[10px] text-emerald-400">Conectado: {status.name}</p>}
+      {error && <p className="text-[10px] text-red-400">{error}</p>}
     </div>
   );
 }
