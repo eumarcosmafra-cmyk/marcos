@@ -27,7 +27,14 @@ export function Header() {
           </div>
         </div>
         <button
-          onClick={() => signOut({ callbackUrl: "/" })}
+          onClick={async () => {
+            try {
+              await fetch("/api/auth/revoke", { method: "POST" });
+            } catch (e) {
+              console.error("[header] revoke failed:", e);
+            }
+            await signOut({ callbackUrl: "/" });
+          }}
           title="Sair"
           className="rounded-lg p-2 text-white/40 transition-colors hover:bg-white/5 hover:text-white"
         >
