@@ -2,54 +2,33 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ClientPortalDashboard, type PortalSnapshot } from "@/components/portal/client-portal-dashboard";
-
-interface Report {
-  id: string;
-  period: string;
-  periodType: string;
-  createdAt: string;
-  clicks: number;
-  impressions: number;
-  revenue: number;
-  clicksDelta?: number;
-  impressionsDelta?: number;
-  cartConversion?: number;
-  aiScore?: number;
-  analystNotes?: string | null;
-}
-
-interface ClientInfo {
-  name: string;
-  domain: string;
-}
+import { ClientPortalDashboard } from "@/components/portal/client-portal-dashboard";
+import type { OrganicRevenueData } from "@/components/portal/organic-revenue-dashboard";
 
 export default function PortalPage() {
   const router = useRouter();
-  const [reports, setReports] = useState<Report[]>([]);
-  const [client, setClient] = useState<ClientInfo | null>(null);
-  const [snapshot, setSnapshot] = useState<PortalSnapshot | null>(null);
-  const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<string | null>(null);
+  const [data, setData] = useState<OrganicRevenueData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/portal/reports").then(r => r.json()),
-      fetch("/api/portal/dashboard").then(r => r.json()),
-    ])
-      .then(([reportsData, dashData]) => {
-        if (reportsData.error) {
+    fetch("/api/portal/organic-revenue")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.error && !d.client) {
           router.push("/portal/login");
           return;
         }
-        setReports(reportsData.reports || []);
-        setClient(reportsData.client || dashData.client || null);
-        if (!dashData.error) {
-          setSnapshot(dashData.snapshot || null);
-          setSnapshotUpdatedAt(dashData.snapshotUpdatedAt || null);
+        if (d.error) {
+          setError(d.error);
+          return;
         }
+        setData(d);
       })
-      .catch(() => router.push("/portal/login"))
+      .catch((e) => {
+        console.error("[portal] Error:", e);
+        setError("Erro ao carregar dashboard.");
+      })
       .finally(() => setLoading(false));
   }, [router]);
 
@@ -58,25 +37,12 @@ export default function PortalPage() {
     router.push("/portal/login");
   }
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#07111d] text-white">
-        <div className="glass-card rounded-[28px] px-8 py-6 text-center shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
-          <p className="text-sm uppercase tracking-[0.32em] text-white/35">Portal do cliente</p>
-          <p className="mt-3 text-lg font-medium text-white/80">Carregando ambiente de relatórios...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <ClientPortalDashboard
-      client={client}
-      reports={reports}
-      snapshot={snapshot}
-      snapshotUpdatedAt={snapshotUpdatedAt}
+      data={data}
+      loading={loading}
+      error={error}
       onLogout={handleLogout}
-      onOpenReport={(reportId) => router.push(`/portal/reports/${reportId}`)}
     />
   );
 }
