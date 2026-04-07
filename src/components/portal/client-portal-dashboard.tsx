@@ -36,9 +36,42 @@ interface PortalReport {
   analystNotes?: string | null;
 }
 
+interface SnapshotGSC {
+  totalClicks: number;
+  totalImpressions: number;
+  avgCtr: number;
+  avgPosition: number;
+  topQueries: { keys?: string[]; clicks: number; impressions: number; ctr: number; position: number }[];
+  topPages: { keys?: string[]; clicks: number; impressions: number; ctr: number; position: number }[];
+}
+
+interface SnapshotGA4 {
+  revenue: number;
+  transactions: number;
+  sessions: number;
+  users: number;
+}
+
+interface SnapshotGA4Page {
+  pagePath: string;
+  pageTitle: string;
+  sessions: number;
+  revenue: number;
+  transactions: number;
+}
+
+export interface PortalSnapshot {
+  period: { startDate: string; endDate: string };
+  gsc: SnapshotGSC | null;
+  ga4: SnapshotGA4 | null;
+  ga4Pages: SnapshotGA4Page[] | null;
+}
+
 interface PortalDashboardProps {
   client: PortalClient | null;
   reports: PortalReport[];
+  snapshot?: PortalSnapshot | null;
+  snapshotUpdatedAt?: string | null;
   onOpenReport?: (reportId: string) => void;
   onLogout?: () => void;
 }
@@ -128,6 +161,8 @@ function MetricCard({
 export function ClientPortalDashboard({
   client,
   reports,
+  snapshot,
+  snapshotUpdatedAt,
   onOpenReport,
   onLogout,
 }: PortalDashboardProps) {
@@ -289,6 +324,10 @@ export function ClientPortalDashboard({
                 </div>
               </section>
 
+              {snapshot && (snapshot.gsc || snapshot.ga4) && (
+                <SnapshotLiveSection snapshot={snapshot} updatedAt={snapshotUpdatedAt} />
+              )}
+
               {latestReport ? (
                 <>
                   <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -447,4 +486,103 @@ export function ClientPortalDashboard({
 
 function MousePointerIcon() {
   return <ArrowRight className="h-4 w-4 -rotate-45" />;
+}
+
+function SnapshotLiveSection({
+  snapshot,
+  updatedAt,
+}: {
+  snapshot: PortalSnapshot;
+  updatedAt?: string | null;
+}) {
+  const gsc = snapshot.gsc;
+  const ga4 = snapshot.ga4;
+  const ga4Pages = snapshot.ga4Pages || [];
+
+  return (
+    <section className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.32em] text-white/35">Performance ao vivo · últimos 28 dias</p>
+          <h3 className="mt-2 text-2xl font-semibold text-white">Snapshot GSC + GA4</h3>
+        </div>
+        {updatedAt && (
+          <span className="text-[11px] text-white/40">
+            Atualizado em {new Date(updatedAt).toLocaleString("pt-BR")}
+          </span>
+        )}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {gsc && (
+          <>
+            <MetricCard title="Cliques (GSC)" value={formatCompactNumber(gsc.totalClicks)} helper="orgânico capturado" icon={<Search className="h-4 w-4" />} />
+            <MetricCard title="Impressões" value={formatCompactNumber(gsc.totalImpressions)} helper="presença nas SERPs" icon={<Eye className="h-4 w-4" />} />
+          </>
+        )}
+        {ga4 && (
+          <>
+            <MetricCard title="Receita orgânica" value={formatCurrency(ga4.revenue)} helper="GA4 · canal Organic Search" icon={<BadgeDollarSign className="h-4 w-4" />} />
+            <MetricCard title="Sessões orgânicas" value={formatCompactNumber(ga4.sessions)} helper={`${formatCompactNumber(ga4.transactions)} transações`} icon={<ShoppingCart className="h-4 w-4" />} />
+          </>
+        )}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        {gsc && gsc.topQueries.length > 0 && (
+          <div className="glass-card rounded-[28px] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:p-7">
+            <p className="text-[11px] uppercase tracking-[0.32em] text-white/35">Top queries</p>
+            <h4 className="mt-3 text-lg font-semibold text-white">O que está trazendo cliques</h4>
+            <table className="mt-5 w-full text-sm">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-[0.2em] text-white/35">
+                  <th className="pb-3 text-left font-medium">Query</th>
+                  <th className="pb-3 text-right font-medium">Cliques</th>
+                  <th className="pb-3 text-right font-medium">Impr.</th>
+                  <th className="pb-3 text-right font-medium">Pos.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gsc.topQueries.slice(0, 8).map((q, i) => (
+                  <tr key={i} className="border-t border-white/5">
+                    <td className="max-w-[220px] truncate py-2 text-white/80">{q.keys?.[0] || "—"}</td>
+                    <td className="py-2 text-right text-white/70 tabular-nums">{formatCompactNumber(q.clicks)}</td>
+                    <td className="py-2 text-right text-white/50 tabular-nums">{formatCompactNumber(q.impressions)}</td>
+                    <td className="py-2 text-right text-white/50 tabular-nums">{q.position.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {ga4Pages.length > 0 && (
+          <div className="glass-card rounded-[28px] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:p-7">
+            <p className="text-[11px] uppercase tracking-[0.32em] text-white/35">Páginas orgânicas</p>
+            <h4 className="mt-3 text-lg font-semibold text-white">Top pages que geram receita</h4>
+            <table className="mt-5 w-full text-sm">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-[0.2em] text-white/35">
+                  <th className="pb-3 text-left font-medium">Página</th>
+                  <th className="pb-3 text-right font-medium">Sessões</th>
+                  <th className="pb-3 text-right font-medium">Receita</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ga4Pages.slice(0, 8).map((p, i) => (
+                  <tr key={i} className="border-t border-white/5">
+                    <td className="max-w-[220px] truncate py-2 text-white/80" title={p.pagePath}>
+                      {p.pageTitle || p.pagePath}
+                    </td>
+                    <td className="py-2 text-right text-white/70 tabular-nums">{formatCompactNumber(p.sessions)}</td>
+                    <td className="py-2 text-right font-semibold text-emerald-300 tabular-nums">{formatCurrency(p.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  );
 }

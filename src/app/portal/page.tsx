@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ClientPortalDashboard } from "@/components/portal/client-portal-dashboard";
+import { ClientPortalDashboard, type PortalSnapshot } from "@/components/portal/client-portal-dashboard";
 
 interface Report {
   id: string;
@@ -28,19 +28,26 @@ export default function PortalPage() {
   const router = useRouter();
   const [reports, setReports] = useState<Report[]>([]);
   const [client, setClient] = useState<ClientInfo | null>(null);
+  const [snapshot, setSnapshot] = useState<PortalSnapshot | null>(null);
+  const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/portal/reports")
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.error) {
+    Promise.all([
+      fetch("/api/portal/reports").then(r => r.json()),
+      fetch("/api/portal/dashboard").then(r => r.json()),
+    ])
+      .then(([reportsData, dashData]) => {
+        if (reportsData.error) {
           router.push("/portal/login");
           return;
         }
-
-        setReports(data.reports || []);
-        setClient(data.client || null);
+        setReports(reportsData.reports || []);
+        setClient(reportsData.client || dashData.client || null);
+        if (!dashData.error) {
+          setSnapshot(dashData.snapshot || null);
+          setSnapshotUpdatedAt(dashData.snapshotUpdatedAt || null);
+        }
       })
       .catch(() => router.push("/portal/login"))
       .finally(() => setLoading(false));
@@ -66,6 +73,8 @@ export default function PortalPage() {
     <ClientPortalDashboard
       client={client}
       reports={reports}
+      snapshot={snapshot}
+      snapshotUpdatedAt={snapshotUpdatedAt}
       onLogout={handleLogout}
       onOpenReport={(reportId) => router.push(`/portal/reports/${reportId}`)}
     />
