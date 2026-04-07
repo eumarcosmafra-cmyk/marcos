@@ -216,13 +216,14 @@ export function ClientPortalDashboard({
 
             <div className="space-y-2">
               {[
-                { label: "Overview", icon: <BarChart3 className="h-4 w-4" />, active: true },
-                { label: "Relatórios", icon: <FileText className="h-4 w-4" /> },
-                { label: "Receita orgânica", icon: <BadgeDollarSign className="h-4 w-4" /> },
-                { label: "Oportunidades", icon: <Sparkles className="h-4 w-4" /> },
+                { label: "Overview", icon: <BarChart3 className="h-4 w-4" />, active: true, href: "/portal" },
+                { label: "Dashboard Orgânico", icon: <BadgeDollarSign className="h-4 w-4" />, href: "/portal/organic-revenue" },
+                { label: "Relatórios", icon: <FileText className="h-4 w-4" />, href: "/portal" },
+                { label: "Oportunidades", icon: <Sparkles className="h-4 w-4" />, href: "/portal" },
               ].map((item) => (
-                <div
+                <a
                   key={item.label}
+                  href={item.href}
                   className={[
                     "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition-all",
                     item.active
@@ -232,7 +233,7 @@ export function ClientPortalDashboard({
                 >
                   <span className={item.active ? "text-cyan-300" : "text-white/40"}>{item.icon}</span>
                   <span>{item.label}</span>
-                </div>
+                </a>
               ))}
             </div>
 
@@ -323,6 +324,18 @@ export function ClientPortalDashboard({
                   </div>
                 </div>
               </section>
+
+              <a
+                href="/portal/organic-revenue"
+                className="glass-card group flex items-center justify-between rounded-[24px] border border-cyan-300/15 bg-gradient-to-r from-cyan-400/[0.06] to-transparent p-5 transition hover:border-cyan-300/30"
+              >
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.32em] text-cyan-300/80">Novo</p>
+                  <p className="mt-2 text-lg font-semibold text-white">Ver Dashboard de Resultado Orgânico</p>
+                  <p className="mt-1 text-xs text-white/55">Cruzamento de tráfego orgânico, produto e receita em uma única leitura.</p>
+                </div>
+                <ArrowRight className="h-5 w-5 text-cyan-300 transition group-hover:translate-x-1" />
+              </a>
 
               {snapshot && (snapshot.gsc || snapshot.ga4) && (
                 <SnapshotLiveSection snapshot={snapshot} updatedAt={snapshotUpdatedAt} />
