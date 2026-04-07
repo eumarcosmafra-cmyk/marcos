@@ -503,12 +503,37 @@ function sum(arr: number[]) {
   return arr.reduce((a, b) => a + b, 0);
 }
 
-function classifyByUrl(path: string): "produto" | "categoria" | "conteudo" | "marca" {
-  const p = path.toLowerCase();
-  if (/\/(blog|artigo|post|guia|dica)/.test(p)) return "conteudo";
-  if (/\/(categoria|colecao|collection|\/c\/|\/cat\/)/.test(p)) return "categoria";
-  if (p === "/" || /\/(sobre|institucional|brand)/.test(p)) return "marca";
-  return "produto";
+function inferBlockType(pagePath: string): 'produto' | 'categoria' | 'conteudo' | 'marca' {
+  const path = pagePath.toLowerCase().replace(/^\//, '').split('?')[0]
+  const segments = path.split('/').filter(Boolean)
+
+  if (segments.length === 0) return 'marca'
+
+  const first = segments[0]
+
+  if (first === 'blog') return 'conteudo'
+
+  const marcaRoutes = [
+    'sobre-nos', 'atendimento', 'politicas-de-privacidade',
+    'trocas-e-devolucoes', 'formas-de-pagamentos', 'loja-confiavel',
+    'sorteio-instagram', 'cashback-epulari', 'regras-e-promocoes',
+    'servicos-de-entregas', 'avaliacao-clientes', 'login', 'cliente',
+    'checkout', 'carrinho', 'busca', 'avaliacao'
+  ]
+  if (marcaRoutes.includes(first)) return 'marca'
+
+  const categoriaRoutes = [
+    'feminino', 'masculino', 'infantil', 'acessorios',
+    'marca', 'promocao', 'outlet', 'lancamentos',
+    'queridinhos', 'esportes', 'tecnologias'
+  ]
+  if (categoriaRoutes.includes(first)) return 'categoria'
+
+  // URL flat na raiz com slug longo = produto
+  // ex: /body-feminino-manga-curta-marrom-moda-praia-protecao-solar-epulari
+  if (segments.length === 1 && first.length > 20) return 'produto'
+
+  return 'produto'
 }
 
 function groupPagesByUrlSegment(pages: { pagePath: string; revenue: number }[]) {
@@ -552,7 +577,7 @@ function computeBlocks(
     marca: { clicks: 0, revenue: 0, ctr: 0 },
   };
   for (const page of data.topPages) {
-    const k = classifyByUrl(page.pagePath);
+    const k = inferBlockType(page.pagePath);
     out[k].revenue += page.revenue;
   }
   // Distribute clicks proportionally to revenue if no per-block clicks available
