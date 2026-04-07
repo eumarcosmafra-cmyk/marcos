@@ -335,6 +335,9 @@ export default function ClientDetailPage() {
           {/* GA4 Configuration */}
           <GA4Config clientId={client.id} currentPropertyId={client.ga4PropertyId} />
 
+          {/* Portal Snapshot Refresh */}
+          <SnapshotRefresh clientId={client.id} />
+
           {/* Portal Access Management */}
           <div className="glass-card p-4 space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Acesso do Cliente ao Portal</h3>
@@ -774,6 +777,44 @@ function GA4Config({ clientId, currentPropertyId }: { clientId: string; currentP
         </div>
       )}
       {error && <p className="text-[10px] text-red-400">{error}</p>}
+    </div>
+  );
+}
+
+function SnapshotRefresh({ clientId }: { clientId: string }) {
+  const [loading, setLoading] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function refresh() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/snapshot`, { method: "POST" });
+      const data = await res.json();
+      if (data.error) setError(data.error);
+      else setUpdatedAt(data.snapshotUpdatedAt);
+    } catch (e) {
+      console.error("[SnapshotRefresh] Error:", e);
+      setError("Erro ao atualizar snapshot.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="glass-card p-4 space-y-2">
+      <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Dashboard do Portal</h3>
+      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+        Atualiza os dados de GSC e GA4 que o cliente vê no portal (snapshot dos últimos 28 dias).
+      </p>
+      <div className="flex items-center gap-3">
+        <button onClick={refresh} disabled={loading} className="btn-primary px-3 py-1.5 text-[10px] disabled:opacity-50">
+          {loading ? "Atualizando..." : "Atualizar snapshot"}
+        </button>
+        {updatedAt && <span className="text-[10px] text-emerald-400">Atualizado: {new Date(updatedAt).toLocaleString("pt-BR")}</span>}
+        {error && <span className="text-[10px] text-red-400">{error}</span>}
+      </div>
     </div>
   );
 }
