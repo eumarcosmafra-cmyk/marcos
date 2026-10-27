@@ -1,0 +1,25 @@
+{
+  "name": "acamavi-declaracao-pep",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@pdf-lib/fontkit": "1.1.1",
+    "@vercel/blob": "2.8.2",
+    "fflate": "0.8.3",
+    "next": "15.5.28",
+    "pdf-lib": "1.17.1",
+    "react": "19.1.10",
+    "react-dom": "19.1.10"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/react": "19.1.17",
+    "@types/react-dom": "19.1.11",
+    "typescript": "5.9.3"
+  }
+}
