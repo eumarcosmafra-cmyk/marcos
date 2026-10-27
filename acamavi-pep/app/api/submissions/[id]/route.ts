@@ -9,12 +9,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const s = await readSubmission(id)
     if (!s || !tokenMatches(s, req.nextUrl.searchParams.get("t"))) return error("Link inválido ou expirado.", 404)
-    return json<SubmissionStatusResponse>({
-      id: s.id,
-      nome: s.nome,
-      signed: Boolean(s.signed),
-      signedAt: s.signed?.uploadedAt ?? null,
-    })
+    return json<SubmissionStatusResponse>({ id: s.id, nome: s.nome })
   } catch (e) {
     console.error("[api/submissions/[id]] Erro:", e)
     return error("Não foi possível carregar agora. Tente novamente.", 500)

@@ -36,8 +36,6 @@ function buildCsv(list: SubmissionSummary[]): string {
     "PEP",
     "Pessoas informadas (PEP)",
     "Preenchido em",
-    "Documento assinado enviado",
-    "Assinado enviado em",
   ]
   const rows = list.map((s) => [
     s.nome,
@@ -53,11 +51,9 @@ function buildCsv(list: SubmissionSummary[]): string {
       })
       .join(" / "),
     formatDateTime(s.createdAt),
-    s.signed ? "Sim" : "Não",
-    s.signed ? formatDateTime(s.signed.uploadedAt) : "",
   ])
   // BOM + ";" para o Excel em português abrir com acentos e colunas corretas
-  return "﻿" + [header, ...rows].map((r) => r.map(csvCell).join(";")).join("\r\n")
+  return "\uFEFF" + [header, ...rows].map((r) => r.map(csvCell).join(";")).join("\r\n")
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -79,12 +75,6 @@ async function fetchBytes(url: string): Promise<Uint8Array> {
 
 function baseName(s: SubmissionSummary): string {
   return `${fileSlug(s.nome)}_${s.id.slice(0, 6)}`
-}
-
-function extOf(contentType: string): string {
-  if (contentType === "application/pdf") return "pdf"
-  if (contentType === "image/png") return "png"
-  return "jpg"
 }
 
 export default function AdminPage() {
@@ -186,38 +176,18 @@ export default function AdminPage() {
     setError(null)
     try {
       const files: Zippable = { "dados.csv": strToU8(buildCsv(list)) }
-      const tasks: { label: string; run: () => Promise<void> }[] = []
-      for (const s of list) {
-        tasks.push({
-          label: s.nome,
-          run: async () => {
-            files[`declaracoes-preenchidas/${baseName(s)}.pdf`] = await fetchBytes(`/api/submissions/${s.id}/pdf`)
-          },
-        })
-        if (s.signed) {
-          const signed = s.signed
-          tasks.push({
-            label: s.nome,
-            run: async () => {
-              files[`declaracoes-assinadas/${baseName(s)}.${extOf(signed.contentType)}`] = await fetchBytes(
-                `/api/submissions/${s.id}/signed`,
-              )
-            },
-          })
-        }
-      }
       let done = 0
-      const queue = [...tasks]
+      const queue = [...list]
       const worker = async () => {
-        for (let t = queue.shift(); t; t = queue.shift()) {
-          await t.run()
+        for (let s = queue.shift(); s; s = queue.shift()) {
+          files[`declaracoes/${baseName(s)}.pdf`] = await fetchBytes(`/api/submissions/${s.id}/pdf`)
           done++
-          setProgress(`Preparando arquivos: ${done}/${tasks.length}`)
+          setProgress(`Gerando PDFs: ${done}/${list.length}`)
         }
       }
       await Promise.all(Array.from({ length: 4 }, worker))
       setProgress("Compactando…")
-      // PDFs e fotos já são comprimidos: só armazenar
+      // PDFs já são comprimidos: só armazenar
       const zipped = zipSync(files, { level: 0 })
       const stamp = new Date().toISOString().slice(0, 10)
       downloadBlob(new Blob([zipped as Uint8Array<ArrayBuffer>], { type: "application/zip" }), `acamavi-declaracoes-pep-${stamp}.zip`)
@@ -264,7 +234,6 @@ export default function AdminPage() {
     )
   }
 
-  const signedCount = list.filter((s) => s.signed).length
   const pepCount = list.filter((s) => s.pep === "sim").length
 
   return (
@@ -275,12 +244,6 @@ export default function AdminPage() {
         <div className="stats">
           <span>
             <strong>{list.length}</strong> preenchidas
-          </span>
-          <span>
-            <strong>{signedCount}</strong> com documento assinado
-          </span>
-          <span>
-            <strong>{list.length - signedCount}</strong> aguardando assinatura
           </span>
           <span>
             <strong>{pepCount}</strong> marcaram SIM (PEP)
@@ -312,8 +275,7 @@ export default function AdminPage() {
                   <th>CPF</th>
                   <th>PEP</th>
                   <th>Preenchido em</th>
-                  <th>Assinado</th>
-                  <th>Arquivos</th>
+                  <th>Declaração</th>
                   <th />
                 </tr>
               </thead>
@@ -325,20 +287,7 @@ export default function AdminPage() {
                     <td>{s.pep === "sim" ? "SIM" : "NÃO"}</td>
                     <td>{formatDateTime(s.createdAt)}</td>
                     <td>
-                      {s.signed ? (
-                        <span className="tag-ok">Sim · {formatDateTime(s.signed.uploadedAt)}</span>
-                      ) : (
-                        <span className="tag-pending">Aguardando</span>
-                      )}
-                    </td>
-                    <td className="wrap-cell">
-                      <a href={`/api/submissions/${s.id}/pdf`}>PDF preenchido</a>
-                      {s.signed && (
-                        <>
-                          {" · "}
-                          <a href={`/api/submissions/${s.id}/signed`}>Assinado</a>
-                        </>
-                      )}
+                      <a href={`/api/submissions/${s.id}/pdf`}>Baixar PDF</a>
                     </td>
                     <td>
                       <button type="button" className="btn-link btn-danger-link" onClick={() => remove(s)} disabled={busy}>

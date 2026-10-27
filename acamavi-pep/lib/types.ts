@@ -18,14 +18,6 @@ export interface DeclaracaoInput {
   consent: boolean
 }
 
-export interface SignedFile {
-  pathname: string
-  contentType: string
-  size: number
-  originalName: string
-  uploadedAt: string
-}
-
 export interface Submission {
   id: string
   tokenHash: string
@@ -40,7 +32,6 @@ export interface Submission {
   pep: PepAnswer
   pepRows: PepRow[]
   consentAt: string
-  signed: SignedFile | null
 }
 
 export type SubmissionSummary = Omit<Submission, "tokenHash">
@@ -54,8 +45,6 @@ export interface CreateSubmissionResponse {
 export interface SubmissionStatusResponse {
   id: string
   nome: string
-  signed: boolean
-  signedAt: string | null
 }
 
 export type FieldErrors = Partial<Record<string, string>>

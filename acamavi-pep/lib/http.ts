@@ -25,9 +25,3 @@ export function fileResponse(bytes: Uint8Array, contentType: string, filename: s
     },
   })
 }
-
-export function extensionFor(contentType: string): string {
-  if (contentType === "application/pdf") return "pdf"
-  if (contentType === "image/png") return "png"
-  return "jpg"
-}

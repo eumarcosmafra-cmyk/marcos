@@ -2,11 +2,11 @@
 
 import { Suspense, useEffect, useState } from "react"
 import { useParams, useSearchParams } from "next/navigation"
-import { AfterSubmit } from "@/components/AfterSubmit"
 import { Brand } from "@/components/Brand"
+import { DownloadDeclaracao } from "@/components/DownloadDeclaracao"
 import type { ApiError, SubmissionStatusResponse } from "@/lib/types"
 
-function EnviarContent() {
+function DeclaracaoContent() {
   const { id } = useParams<{ id: string }>()
   const token = useSearchParams().get("t") ?? ""
   const [status, setStatus] = useState<SubmissionStatusResponse | null>(null)
@@ -25,7 +25,7 @@ function EnviarContent() {
         const data = (await res.json()) as SubmissionStatusResponse
         if (!cancelled) setStatus(data)
       } catch (e) {
-        console.error("[enviar] Erro ao carregar:", e)
+        console.error("[declaracao] Erro ao carregar:", e)
         if (!cancelled) setError("Falha de conexão. Recarregue a página.")
       }
     }
@@ -44,15 +44,15 @@ function EnviarContent() {
     )
   }
   if (!status) return <section className="card">Carregando…</section>
-  return <AfterSubmit id={status.id} token={token} nome={status.nome} signedAt={status.signedAt} />
+  return <DownloadDeclaracao id={status.id} token={token} nome={status.nome} />
 }
 
-export default function EnviarPage() {
+export default function DeclaracaoPage() {
   return (
     <main className="wrap">
       <Brand />
       <Suspense fallback={<section className="card">Carregando…</section>}>
-        <EnviarContent />
+        <DeclaracaoContent />
       </Suspense>
     </main>
   )

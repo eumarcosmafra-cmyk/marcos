@@ -6,7 +6,6 @@ import type { Submission } from "./types"
 // Em produção tudo fica em um Blob store PRIVADO: nenhum arquivo tem URL pública.
 // LOCAL_STORAGE_DIR existe só para testar o app fora da Vercel (grava em disco).
 const SUBMISSIONS = "submissions/"
-const SIGNED = "signed/"
 
 const ID_RE = /^[a-f0-9]{24}$/
 
@@ -54,9 +53,6 @@ const blobBackend: Backend = {
 
 const CONTENT_TYPES: Record<string, string> = {
   ".json": "application/json",
-  ".pdf": "application/pdf",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
 }
 
 function localBackend(dir: string): Backend {
@@ -100,16 +96,8 @@ function submissionPath(id: string) {
   return `${SUBMISSIONS}${id}.json`
 }
 
-function signedPath(id: string, ext: string) {
-  return `${SIGNED}${id}.${ext}`
-}
-
 export async function saveSubmission(s: Submission): Promise<void> {
   await backend.put(submissionPath(s.id), new TextEncoder().encode(JSON.stringify(s)), "application/json")
-}
-
-export async function readBlobBytes(pathname: string): Promise<StoredFile | null> {
-  return backend.get(pathname)
 }
 
 export async function readSubmission(id: string): Promise<Submission | null> {
@@ -134,16 +122,6 @@ export async function listSubmissions(): Promise<Submission[]> {
   return out
 }
 
-export async function saveSignedFile(id: string, ext: string, bytes: Uint8Array, contentType: string): Promise<string> {
-  const pathname = signedPath(id, ext)
-  await backend.put(pathname, bytes, contentType)
-  return pathname
-}
-
-export async function deleteBlobs(pathnames: string[]): Promise<void> {
-  await backend.del(pathnames)
-}
-
 export async function deleteSubmission(s: Submission): Promise<void> {
-  await backend.del([submissionPath(s.id), ...(s.signed ? [s.signed.pathname] : [])])
+  await backend.del([submissionPath(s.id)])
 }

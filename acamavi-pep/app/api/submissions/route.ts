@@ -30,7 +30,6 @@ export async function POST(req: Request) {
     dataDeclaracao: todayInSaoPaulo(now),
     ...data,
     consentAt: now.toISOString(),
-    signed: null,
   }
 
   try {

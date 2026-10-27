@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: [
           { key: "X-Robots-Tag", value: "noindex, nofollow" },
-          // Links de envio carregam token na URL: não vazar via Referer
+          // O link pessoal (/declaracao/[id]?t=...) carrega token na URL: não vazar via Referer
           { key: "Referrer-Policy", value: "no-referrer" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },

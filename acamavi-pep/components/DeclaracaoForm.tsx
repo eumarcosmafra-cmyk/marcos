@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import * as T from "@/lib/document-text"
 import type { ApiError, CreateSubmissionResponse, FieldErrors, PepAnswer, PepRow } from "@/lib/types"
 import { MAX_PEP_ROWS, emptyPepRow, maskCpf, validateDeclaracao } from "@/lib/validation"
-import { AfterSubmit } from "./AfterSubmit"
+import { DownloadDeclaracao } from "./DownloadDeclaracao"
 
 const STORAGE_KEY = "acamavi_pep_ultima"
 
@@ -90,7 +90,7 @@ export function DeclaracaoForm() {
   }
 
   if (result) {
-    return <AfterSubmit id={result.id} token={result.token} nome={result.nome} signedAt={null} />
+    return <DownloadDeclaracao id={result.id} token={result.token} nome={result.nome} />
   }
 
   const err = (key: string) =>
@@ -108,15 +108,14 @@ export function DeclaracaoForm() {
         <ol className="steps">
           <li>Preencha seus dados abaixo.</li>
           <li>Baixe a declaração já preenchida (PDF).</li>
-          <li>Assine pelo gov.br ou imprima e assine à mão.</li>
-          <li>Envie o documento assinado por esta mesma página.</li>
+          <li>Imprima, assine à mão e entregue à ACAMAVI.</li>
         </ol>
       </section>
 
       {saved && (
         <div className="alert alert-info">
           Você já preencheu uma declaração neste aparelho ({saved.nome}).{" "}
-          <a href={`/enviar/${saved.id}?t=${encodeURIComponent(saved.token)}`}>Continuar para assinatura</a>
+          <a href={`/declaracao/${saved.id}?t=${encodeURIComponent(saved.token)}`}>Baixar de novo</a>
           {" · "}
           <button
             type="button"
