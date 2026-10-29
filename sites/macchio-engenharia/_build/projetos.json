@@ -1,0 +1,794 @@
+[
+ {
+  "slug": "residencia-a-e-d",
+  "old_slug": "residencia-unifamiliar-a-e-d",
+  "name": "Residência A e D",
+  "cat": "unifamiliar",
+  "type": "Residência unifamiliar",
+  "city": "Rio do Sul",
+  "area": "246,01 m²",
+  "scope": "Projeto",
+  "desc": [
+   "A casa conta com uma suíte ampla com closet e sacada, dois quartos, banheiro social na área superior. Já a área inferior conta com uma garagem para dois carros, sala de estar com pé direito duplo, cozinha e sala de jantar conjugada, área de serviço e um depósito."
+  ],
+  "cover_alt": "Sobrado contemporâneo com volume escuro em balanço, grandes panos de vidro e garagem coberta",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "residencia-f-e-m",
+  "old_slug": "residencia-unifamiliar-f-e-m",
+  "name": "Residência F e M",
+  "cat": "unifamiliar",
+  "type": "Residência unifamiliar",
+  "city": "Aurora",
+  "area": "389,27 m²",
+  "scope": "Projeto",
+  "desc": [
+   "No andar inferior temos uma sala, cozinha, copa, área de serviço, banheiro social, dois quartos e uma sala de costura.",
+   "No andar superior projetamos uma sala de estar, cozinha e área de festas integrada, um lavabo, área de serviço, uma suíte com closet, um banheiro social e dois quartos."
+  ],
+  "cover_alt": "Sobrado com coluna revestida em pedra, sacada em vidro e garagem para dois carros",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "residencia-p-e-r",
+  "old_slug": "residencia-unifamiliar-p-e-r",
+  "name": "Residência P e R",
+  "cat": "unifamiliar",
+  "type": "Residência unifamiliar",
+  "city": "Aurora",
+  "area": "225,21 m²",
+  "scope": "Projeto e execução",
+  "desc": [
+   "A parte inferior do chalé possui sala de estar, copa com mesa de jantar, cozinha com churrasqueira e fogão a lenha, banheiro social e um quarto com suíte e banheira.",
+   "A parte superior conta com sala de estar no mezanino com vista para a cozinha, uma suíte com closet e duas sacadas com vista panorâmica."
+  ],
+  "cover_alt": "Chalé em madeira e pedra com varanda, telhado aparente e jardim",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "05",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "06",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "07",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "08",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "residencia-l-e-g",
+  "old_slug": "residencia-unifamiliar-l-e-g",
+  "name": "Residência L e G",
+  "cat": "unifamiliar",
+  "type": "Residência unifamiliar",
+  "city": "Rio do Sul",
+  "area": "243,09 m²",
+  "scope": "Projeto",
+  "desc": [
+   "Sobrado dividido em andar térreo e superior. No térreo ficou cozinha, copa e sala de estar conjugadas com um conceito todo aberto, área de serviço, uma despensa interna, um banheiro e um quarto.",
+   "O andar superior conta com três suítes, uma com closet, e outra com escritório para estudos, além de um mezanino com visão para área aberta de baixo.",
+   "Ao fundo do terreno, projetamos para integrar com a área aberta, uma piscina com deck, além de mais um banheiro e despensa externos."
+  ],
+  "cover_alt": "Sobrado com fachada em tons de cinza, jardim e garagem integrada, ao entardecer",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "05",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "residencia-l-e-d",
+  "old_slug": "residencia-unifamiliar-l-e-d",
+  "name": "Residência L e D",
+  "cat": "unifamiliar",
+  "type": "Residência unifamiliar",
+  "city": "Rio do Sul",
+  "area": "238,55 m²",
+  "scope": "Projeto",
+  "desc": [
+   "A casa conta com três quartos com suíte, um sendo suíte master, um escritório, um lavabo, área de serviço, despensa, banheiro social na área de festa, e o charme ficou por conta de a cozinha, a sala de TV, a sala de estar e a área gourmet ficarem ligadas sem nenhuma divisória.",
+   "E aos fundos do terreno, projetamos um deck com piscina para aproveitar ainda mais a área gourmet com a família e amigos.",
+   "Além de garagem para dois carros."
+  ],
+  "cover_alt": "Casa térrea contemporânea com garagem para dois carros e detalhes em madeira",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "05",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "06",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "07",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "multifamiliar-03",
+  "old_slug": "residencia-multifamiliar-03",
+  "name": "Multifamiliar 03",
+  "cat": "multifamiliar",
+  "type": "Residência multifamiliar",
+  "city": "Rio do Sul",
+  "area": "235,32 m²",
+  "scope": "Projeto e execução",
+  "desc": [
+   "Cada unidade com 77,45 m², divididos em andar térreo que conta com sala de estar, jantar e cozinha conjugadas, um lavabo, e área de serviço externa.",
+   "O andar superior ficou com dois quartos espaçosos e uma demi-suíte."
+  ],
+  "cover_alt": "Três sobrados geminados com fachada em tijolo aparente e sacadas",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "05",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "interiores-j-e-j",
+  "old_slug": "interiores-j-e-j",
+  "name": "Interiores J e J",
+  "cat": "interiores",
+  "type": "Interiores",
+  "city": "Rio do Sul",
+  "area": null,
+  "scope": "Projeto de interiores",
+  "desc": [
+   "O projeto foi desenvolvido para um casal que já foi nosso cliente, construímos a casa e a ampliação da mesma e desenvolveram conosco o projeto de interior da cozinha.",
+   "O projeto ficou super compacto e ao mesmo tempo confortável e atendendo todas as necessidades do casal."
+  ],
+  "cover_alt": "Cozinha integrada com balcão, pendentes e mesa de jantar",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "05",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "residencia-n-e-a",
+  "old_slug": "https-macchioengenharia-com-br-portfolio-residencia-unifamiliar-n-e-a",
+  "name": "Residência N e A",
+  "cat": "unifamiliar",
+  "type": "Residência unifamiliar",
+  "city": "Rio do Sul",
+  "area": "205,21 m²",
+  "scope": "Projeto",
+  "desc": [
+   "No andar inferior ficou a cozinha com sala de jantar, e uma ampla sala de estar, além de um lavabo, e área de serviço.",
+   "No andar superior, ficaram duas suítes, uma com closet, e mais um quarto, além de um mezanino com visão para a sala no andar inferior.",
+   "E aproveitamos o espaço no fundo do terreno, para projetar um deck com piscina, além de uma lareira externa, dando todo um charme para o espaço."
+  ],
+  "cover_alt": "Sobrado com fachada clara em placas horizontais e garagem lateral",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "05",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "06",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "07",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "multifamiliar-01",
+  "old_slug": "residencia-multifamiliar-01",
+  "name": "Multifamiliar 01",
+  "cat": "multifamiliar",
+  "type": "Residência multifamiliar",
+  "city": "Rio do Sul",
+  "area": "417,79 m²",
+  "scope": "Projeto e execução",
+  "desc": [
+   "Sobrados divididos em andar térreo com sala de estar e jantar conjugadas, cozinha, um lavabo, área de serviço e garagem. No andar superior ficaram três quartos, sendo um suíte com sacada, e outro somente com sacada, e um banheiro social."
+  ],
+  "cover_alt": "Sobrados geminados com fachada clara, cobogós e jardim frontal",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "05",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "06",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": [
+   {
+    "file": "planta-01",
+    "w": 800,
+    "h": 566
+   },
+   {
+    "file": "planta-02",
+    "w": 800,
+    "h": 566
+   }
+  ]
+ },
+ {
+  "slug": "residencia-s-e-g",
+  "old_slug": "residencia-unifamiliar-s-e-g",
+  "name": "Residência S e G",
+  "cat": "unifamiliar",
+  "type": "Residência unifamiliar",
+  "city": "Rio do Sul",
+  "area": "95,08 m²",
+  "scope": "Projeto",
+  "desc": [
+   "O projeto conta com um espaço todo aberto para cozinha, sala de jantar e estar, área de serviço e em uma área mais privativa ficaram os três quartos, um sendo suíte e com closet, e mais um banheiro social."
+  ],
+  "cover_alt": "Casa térrea com parede de revestimento 3D iluminado e garagem coberta",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "residencia-i-e-o",
+  "old_slug": "residencia-unifamiliar-i-e-o",
+  "name": "Residência I e O",
+  "cat": "unifamiliar",
+  "type": "Residência unifamiliar",
+  "city": "Rio do Sul",
+  "area": "103,50 m²",
+  "scope": "Projeto",
+  "desc": [
+   "A casa conta com sala e cozinha conjugadas, dois quartos, banheiro social, garagem para dois carros e espaço de lazer com piscina."
+  ],
+  "cover_alt": "Casa com volume revestido em madeira e garagem coberta para dois carros",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "05",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "interiores-j-e-d",
+  "old_slug": "interiores-j-e-d",
+  "name": "Interiores J e D",
+  "cat": "interiores",
+  "type": "Ampliação e interiores",
+  "city": "Rio do Sul",
+  "area": "106,36 m²",
+  "scope": "Ampliação e interiores",
+  "desc": [
+   "O cliente nos procurou para projetar a ampliação da sua casa, acrescentando ao espaço, mais um quarto, que a partir de agora é uma suíte, e uma ampla área de festa com sacada na parte da frente e de trás.",
+   "Isso tudo na parte superior.",
+   "A parte inferior que passou a existir com o novo projeto será destinada para a garagem, com vaga para dois carros."
+  ],
+  "cover_alt": "Cozinha com ilha, piso de madeira e mesa de refeições integrada",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "05",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "06",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "07",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "08",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "09",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "residencia-m-e-l",
+  "old_slug": "residencia-unifamiliar-m-e-l",
+  "name": "Residência M e L",
+  "cat": "unifamiliar",
+  "type": "Residência unifamiliar",
+  "city": "Rio do Sul",
+  "area": "138,28 m²",
+  "scope": "Projeto",
+  "desc": [
+   "Dividida em cozinha e sala de jantar conjugadas, sala de estar, lavabo, três quartos, sendo um com suíte e closet e outros dois com demi-suíte.",
+   "A parte exterior conta com um banheiro e área de serviço."
+  ],
+  "cover_alt": "Casa térrea com garagem coberta, porta em madeira e volume preto na fachada",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "05",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "residencia-a-e-l",
+  "old_slug": "residencia-unifamiliar-a-e-l",
+  "name": "Residência A e L",
+  "cat": "unifamiliar",
+  "type": "Residência unifamiliar",
+  "city": "Rio do Sul",
+  "area": "184,02 m²",
+  "scope": "Projeto",
+  "desc": [
+   "Criamos um espaço todo integrado entre sala de estar, copa, lavabo, cozinha e área externa, que contém a área de festa e a área de serviço, e em um corredor a parte disso ficaram os quartos, um sendo suíte com closet, outro quarto e mais um banheiro social, além de garagem para dois carros."
+  ],
+  "cover_alt": "Casa térrea com telhado aparente e garagem ampla para dois carros",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "05",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "multifamiliar-02",
+  "old_slug": "residencia-multifamiliar-02",
+  "name": "Multifamiliar 02",
+  "cat": "multifamiliar",
+  "type": "Residência multifamiliar",
+  "city": "Rio do Sul",
+  "area": "123,00 m²",
+  "scope": "Projeto e execução",
+  "desc": [
+   "O projeto total ficou com 123,00 m² e cada geminada conta com 61,50 m², divididos em parte inferior com garagem para dois carros e escada para o segundo piso.",
+   "E o segundo piso conta com sala de estar, jantar e cozinha conjugadas, sacada com churrasqueira, área de serviço, banheiro social e dois quartos, sendo um suíte."
+  ],
+  "cover_alt": "Sobrados geminados com volumes em madeira e concreto e garagens no térreo",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "05",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "06",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": [
+   {
+    "file": "planta-01",
+    "w": 800,
+    "h": 566
+   }
+  ]
+ },
+ {
+  "slug": "multifamiliar-04",
+  "old_slug": "residencia-multifamiliar-04",
+  "name": "Multifamiliar 04",
+  "cat": "multifamiliar",
+  "type": "Residência multifamiliar",
+  "city": "Rio do Sul",
+  "area": "194,95 m²",
+  "scope": "Projeto",
+  "desc": [
+   "Casas geminadas com área total de 194,95 m², e cada unidade com 65,00 m² aproximadamente.",
+   "Desenvolvemos o projeto com sala de estar, copa e cozinha conjugadas em um ambiente aberto, sala com pé direito de 3,30 m, dois quartos, um sendo suíte, um banheiro social, área de serviço e área externa com churrasqueira."
+  ],
+  "cover_alt": "Casas térreas geminadas com fachada em tons de cinza",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "05",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ },
+ {
+  "slug": "residencia-n-e-c",
+  "old_slug": "interiores-n-e-c",
+  "name": "Residência N e C",
+  "cat": "unifamiliar",
+  "type": "Residência unifamiliar",
+  "city": "Rio do Sul",
+  "area": "215,45 m²",
+  "scope": "Projeto",
+  "desc": [
+   "A casa conta com uma suíte ampla com closet e mais duas suítes no andar superior, além de cozinha, um lavabo, sala de estar e um amplo terraço com acesso ao quarto da frente.",
+   "E na parte inferior ficou uma garagem para dois carros com acesso interno para a casa."
+  ],
+  "cover_alt": "Casa em terreno elevado com escadaria ajardinada, garagem e terraço",
+  "renders": [
+   {
+    "file": "01",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "02",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "03",
+    "w": 800,
+    "h": 450
+   },
+   {
+    "file": "04",
+    "w": 800,
+    "h": 450
+   }
+  ],
+  "plans": []
+ }
+]

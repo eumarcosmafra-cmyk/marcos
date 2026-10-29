@@ -1,73 +1,68 @@
-# Macchio Engenharia — novo site (v1)
+# Macchio Engenharia — novo site (v2)
 
-Redesign do site https://macchioengenharia.com.br/ (WordPress 6.1 + Elementor) como página única estática: HTML, CSS e JS puros, sem framework e sem build.
+Redesign do site https://macchioengenharia.com.br/ (WordPress 6.1 + Elementor) como site estático: HTML, CSS e JS puros, sem framework. As páginas são geradas por um script Python a partir de um JSON com os dados das obras.
+
+## Direção visual
+
+- **Monocromático**, como a identidade atual (logo branco sobre preto): preto `#0a0a0a`, branco e cinzas. A cor fica nas fotos das obras.
+- **Tipografia:** Geist (títulos grandes e leves, entrelinha justa) e Geist Mono para dados técnicos (m², cidade, numeração das seções). Licença OFL, fontes auto-hospedadas.
+- **Logo:** vetorizado a partir do PNG original (160×44 px) e usado também em tamanho grande no rodapé.
+
+## Páginas
+
+| URL | Conteúdo |
+|---|---|
+| `/` | Hero em tela cheia com 4 obras se alternando e os dados de cada uma · manifesto · obras selecionadas em rolagem horizontal fixada · serviços em acordeão com imagem · processo em 6 etapas · depoimentos · sobre · FAQ · contato |
+| `/projetos/` | Índice das 17 obras: grade editorial assimétrica ou lista com prévia da foto no hover; filtro por tipo |
+| `/projetos/<obra>/` | Página de cada obra: foto em tela cheia, ficha técnica (tipo, cidade, área, escopo), descrição real da obra, galeria completa com ampliação, plantas humanizadas (quando houver), CTA de WhatsApp com o nome da obra e link para a próxima obra |
+
+Interações: transição suave entre páginas (View Transitions API), cursor "Ver projeto" sobre as obras, revelação das imagens ao rolar, header que se esconde ao descer a página e menu em tela cheia no celular. Tudo respeita `prefers-reduced-motion`.
 
 ## Antes × depois (home, medido em 29/10/2026 com Chromium, sem limitar a rede)
 
-| | Site atual (WordPress) | Novo site |
+| | Site atual | Novo site |
 |---|---|---|
-| Peso na carga inicial (desktop) | 1.329 KB | ~210 KB (HTML/CSS/JS com gzip + fonte + imagens visíveis) |
-| Requisições | 53 | 6 |
-| LCP medido | 6,0 s desktop / 4,5 s mobile | medir no PageSpeed após publicar |
-| Maior imagem do portfólio | PNG 7680×4320 de 33 MB | WebP 640/1280/1920 px, ~25 KB na miniatura |
-| CTA na primeira dobra do celular | nenhum (só uma foto genérica) | WhatsApp + "Ver projetos" |
+| Peso da carga inicial (desktop) | 1.329 KB | ~510 KB (texto com gzip + fonte + hero e próximo slide) |
+| Requisições | 53 | 11 |
+| Imagens do portfólio | PNGs de 1,3 a 33 MB, só a capa na listagem | WebP 800/1600 px, galeria completa (94 perspectivas + 3 plantas) |
+| Páginas de obra indexáveis | 17, sem texto estruturado | 17, com ficha técnica, schema e 301 das URLs antigas |
 
-O LCP do site novo só vale ser comparado depois do deploy, medido no mesmo servidor/CDN. O número local não serve de comparação.
-
-## Problemas do site atual que esta versão corrige
-
-- Os botões "Saiba sobre nós" e "Orçamento" da home apontam para **urbseng.com.br** (o site de outra empresa).
-- O hero usa foto de banco de imagem (prédio que não é da Macchio), sem headline nem CTA. No celular a primeira tela é só essa foto cinza.
-- Não há botão de WhatsApp nem chamada para ação ao longo da página.
-- O portfólio fica numa página separada, sem filtro, com PNGs de 1,3 a 33 MB cada.
-- O depoimento principal ocupa a tela inteira em itálico cinza claro, com contraste baixo.
-- Não há dados estruturados (schema), FAQ nem informação de entidade para o Google e para buscadores de IA.
-
-## Estrutura
-
-```
-index.html              página única (todas as seções)
-assets/styles.css       estilos (tokens de cor/tipografia em :root)
-assets/main.js          menu, filtro e lightbox do portfólio, formulário → WhatsApp, barra fixa no celular
-assets/fonts/           Archivo (variável, licença OFL), auto-hospedada
-assets/img/             hero, OG image, logo (SVG vetorizado do PNG original), projetos e depoimentos
-favicon.svg / *.png     ícones gerados a partir do "M" do logo
-robots.txt, sitemap.xml
-vercel.json             redirects das URLs antigas do WordPress + cache
-```
-
-Seções da home: Hero → Serviços (4 frentes) → Missão → Como funciona (6 etapas) → Projetos (17, com filtro e lightbox) → Depoimentos (5, reais, do site atual) → Sobre + dados da empresa → FAQ → Contato (formulário que abre o WhatsApp com a mensagem pronta) → Rodapé.
+O LCP só vale ser comparado depois do deploy, medido no PageSpeed.
 
 ## SEO / GEO
 
-- Title, meta description, canonical, Open Graph.
-- JSON-LD: `GeneralContractor` + `RealEstateAgent` (NAP, CNPJ, fundador, serviços, redes), `WebSite` e `FAQPage`.
-- Um H1, hierarquia de headings, alt descritivo em todas as imagens.
-- Redirects 301 de `/sobre/`, `/servicos/`, `/contato/`, `/portfolio/` e `/portfolio/*` para as âncoras da home (`vercel.json`). Em outro host, recriar esses redirects lá.
+- Home: `GeneralContractor` + `RealEstateAgent`, `WebSite`, `FAQPage`. Índice: `CollectionPage` + `BreadcrumbList`. Obras: `CreativeWork` (cidade, descrição, imagem) + `BreadcrumbList`.
+- Title, description e imagem OG próprios por obra (`assets/img/projetos/<obra>/og.jpg`).
+- `vercel.json`: 301 de cada `/portfolio/<slug-antigo>/` para a nova `/projetos/<obra>/`, além de `/sobre`, `/servicos`, `/contato` e `/portfolio`.
+- `sitemap.xml` com as 19 URLs.
 
 ## Medição
 
-Todo CTA tem `data-track` e envia `{event: "cta_click", cta: "<nome>"}` para o `dataLayer`. Basta instalar o GTM/GA4 no `<head>` (o ponto está marcado com um comentário) e criar a tag a partir do evento `cta_click`.
+Todo CTA tem `data-track` e envia `{event: "cta_click", cta: "<nome>"}` para o `dataLayer`. Basta instalar o GTM/GA4 no `<head>` (o ponto está marcado com um comentário em `_build/build.py`).
+
+## Como editar
+
+1. Dados das obras: `_build/projetos.json` (nome, tipo, cidade, área, escopo, descrição, imagens).
+2. Textos da home, serviços, FAQ e depoimentos: constantes no topo de `_build/build.py`.
+3. Gerar as páginas: `python3 _build/build.py` (precisa do Pillow para as imagens OG).
+4. Estilos: `assets/css/site.css`. Interações: `assets/js/site.js`.
+
+Nova obra: criar `assets/img/projetos/<slug>/01-800.webp`, `01-1600.webp`… (01 é a capa) e adicionar a entrada no JSON.
 
 ## Pendências: confirmar com o cliente antes de publicar
 
-1. **"Interiores N e C"**: no site atual está como interiores, mas as 5 imagens do projeto são de fachada. Aqui foi renomeado para "Residência N e C". Confirmar.
-2. **Facebook**: o site usa `facebook.com/macchio.imobi`, mas a busca do Google mostra `facebook.com/macchio.eng`. Confirmar qual é o oficial.
-3. **Razão social e CNPJ** (40.033.204/0001-43) vieram de bases públicas de CNPJ, não do site atual. Confirmar.
-4. **CREA/SC 177418-0**: confirmar se é o registro da empresa ou o pessoal do Djonas e ajustar o rótulo.
-5. **Foto do Djonas** e do escritório: não existem no site atual. Com elas, a seção "Sobre" ganha bastante força.
-6. **Logo em vetor oficial** (SVG/AI): o logo aqui foi vetorizado a partir de um PNG de 160×44 px. Ficou fiel, mas o ideal é usar o original.
-7. **Domínio da imobiliária** (macchioimobiliaria.com.br): decidir se ele será unificado neste site com redirect 301. É o recomendado, para não dividir autoridade.
-8. **Credenciamento Caixa**: o site atual não menciona, então este também não. Se for real, entra como prova forte no hero e no FAQ.
+1. **Cidade da Residência F e M**: o site atual diz "Autora". Corrigi para Aurora/SC (a obra P e R também é de Aurora). Confirmar.
+2. **"Interiores N e C"**: as imagens e a descrição (215,45 m², suítes e garagem) são de uma casa, então foi publicada como "Residência N e C".
+3. **Interiores J e D**: a descrição é de uma ampliação (106,36 m²), e as imagens são dos interiores. Tipo definido como "Ampliação e interiores".
+4. **"A execução dessa obra também será da Macchio"** (P e R e Multifamiliares 01, 02 e 03): aparece como escopo "Projeto e execução". Confirmar se as obras foram executadas e, se houver, enviar fotos da obra pronta, que valem mais que render.
+5. **Correções de texto** feitas nas descrições: "lavado" → "lavabo", "pra" → "para", "demi suíte" → "demi-suíte", pontuação na Residência L e D.
+6. **Facebook**: o site usa `/macchio.imobi`, mas o Google mostra `/macchio.eng`.
+7. **Razão social e CNPJ** vieram de bases públicas de CNPJ. Confirmar, junto com quem é o titular do CREA 177418-0.
+8. **Logo vetorial oficial** (SVG/AI) e **foto do Djonas e do escritório**.
+9. **Domínio da imobiliária** (macchioimobiliaria.com.br): recomendo unificar aqui com 301.
+10. **Credenciamento na Caixa**: o site atual não menciona. Se existir, entra no hero e no FAQ.
 
-## Próximos passos sugeridos (v2)
+## Publicar
 
-- Uma página por serviço, com intenção local: financiamento imobiliário, projetos e regularização, construção/gerenciamento e imóveis em Rio do Sul.
-- Uma página por projeto, com a galeria completa (cada projeto tem de 4 a 10 renders no site atual).
-- Google Business Profile: integrar as avaliações reais. Não usar `aggregateRating` com dados próprios.
-
-## Como visualizar e publicar
-
-- Visualizar: abrir `index.html` no navegador, ou rodar `python3 -m http.server` nesta pasta e acessar `http://localhost:8000`.
-- Vercel: novo projeto apontando para este repositório com **Root Directory = `sites/macchio-engenharia`**, framework "Other" e sem build command.
-- Qualquer hospedagem estática (Hostinger, Netlify, Cloudflare Pages): subir o conteúdo desta pasta.
+- Vercel: projeto com **Root Directory = `sites/macchio-engenharia`**, framework "Other" e sem build command (as páginas já estão geradas). `_build/` e este README ficam fora do deploy (`.vercelignore`).
+- Outra hospedagem estática: subir a pasta (sem `_build/`) e recriar os redirects do `vercel.json`.
