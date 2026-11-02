@@ -50,8 +50,8 @@ export function RealShell({ user, children }: { user: ShellUser; children: React
             </Link>
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
-            <span className="hidden items-center gap-1.5 text-slate-300 sm:inline-flex" title="Dados reais do n8n">
-              <ShieldCheck className="h-4 w-4 text-emerald-400" aria-hidden /> Dados reais
+            <span className="hidden items-center gap-1.5 text-slate-300 sm:inline-flex" title="Os dados vêm da fila editorial V2 do n8n; não há dados simulados nesta área">
+              <ShieldCheck className="h-4 w-4 text-slate-400" aria-hidden /> Fonte: n8n
             </span>
             <span className="inline-flex items-center gap-1.5">
               <UserRound className="h-4 w-4 text-slate-400" aria-hidden />

@@ -37,6 +37,20 @@ Navegador ──túnel SSH──▶ 127.0.0.1:3100 (painel-editorial, Next.js)
    ssh -t -i "$env:USERPROFILE\.ssh\n8n_oracle" ubuntu@136.248.117.63 "cd ~/painel-editorial && ./painelctl.sh definir-senha marcos"
    ```
 
+## Estado da implantação (02/11/2026)
+
+| Item | Valor |
+|---|---|
+| Commit implantado | `0bc50f187a7e02616d8cf27c319756c1c3106f01` (imagem `mafra-painel-editorial:0bc50f187a7e`) |
+| Container | `painel-editorial`, healthy, `restart: unless-stopped`, `127.0.0.1:3100`, rede `n8n_default` |
+| Workflow adaptador | `jDkllWCRNqE3Vwd4` — "Painel editorial - adaptador autenticado (v1)", publicado (versionId `4211196c-e8bd-407d-97ff-3258639c0e60`), projeto `1OqXGCWWyJ96f5xm` |
+| Credencial | `lasYxNsNRObc3sg6` — "Painel editorial - token do adaptador" (Header Auth) |
+| n8n | reiniciado uma vez (~5 s) para registrar o webhook; workflows ativos 16 → 17 |
+| Backup do n8n antes da mudança | `~/painel-editorial-work/backup/n8n-20261102T152856Z.sqlite` (integrity_check ok) |
+| Usuários | `marcos` (editor_responsavel, ativo); `leitor_teste` (leitor, **desativado** após os testes) |
+
+Resultados da validação: [VALIDACAO.md](./VALIDACAO.md).
+
 ## Arquivos na VPS
 
 | Caminho | Conteúdo |
