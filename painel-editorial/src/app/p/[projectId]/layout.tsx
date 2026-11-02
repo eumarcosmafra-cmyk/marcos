@@ -47,7 +47,7 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
   if (!projects.some((p) => p.id === projectId)) {
     return (
       <main className="mx-auto max-w-lg px-4 py-16">
-        <ErrorState title="Projeto não encontrado" action={<Link className="btn-secondary" href="/">Abrir um projeto disponível</Link>}>
+        <ErrorState title="Projeto não encontrado" action={<Link className="btn-secondary" href="/p">Abrir um projeto disponível</Link>}>
           O endereço aponta para um projeto que não existe nos dados locais deste navegador.
         </ErrorState>
       </main>

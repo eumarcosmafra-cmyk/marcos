@@ -1,5 +1,5 @@
 // Jornada de validação do painel editorial no navegador.
-// Uso: node scripts/jornada-e2e.cjs <pasta-de-capturas>   (app rodando em http://localhost:3100)
+// Uso: node scripts/jornada-e2e.cjs <pasta-de-capturas>   (app com PAINEL_DEMO=1 em http://localhost:3100)
 // Requer Playwright disponível (npm i -D playwright && npx playwright install chromium).
 const { chromium } = require("playwright");
 const path = require("path");
@@ -32,7 +32,7 @@ const shot = (page, name) => page.screenshot({ path: path.join(OUT, `${name}.png
   });
 
   // 1. Abrir e selecionar o projeto
-  await page.goto(BASE + "/");
+  await page.goto(BASE + "/p");
   await page.waitForURL(/\/p\/avtt$/);
   await page.getByRole("heading", { name: "Visão geral" }).waitFor();
   ok("1. Abre o último/primeiro projeto (AVTT)", page.url().endsWith("/p/avtt"));

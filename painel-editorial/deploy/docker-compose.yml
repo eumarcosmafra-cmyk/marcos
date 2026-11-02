@@ -1,0 +1,32 @@
+# Painel editorial MAFRA LABS — implantação na VPS (ao lado do n8n).
+# Porta publicada só em 127.0.0.1 (acesso por túnel SSH). Comunicação com o n8n
+# pela rede Docker interna n8n_default; nenhuma porta pública nova.
+name: painel-editorial
+services:
+  painel:
+    image: mafra-painel-editorial:${PAINEL_TAG:-atual}
+    container_name: painel-editorial
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:3100:3000"
+    networks:
+      - n8n_default
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  n8n_default:
+    external: true

@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { EditorialProvider } from "@/state/editorial";
 import { ToastProvider } from "@/state/toast";
 import { UnsavedGuardProvider } from "@/state/unsaved-guard";
 import "./globals.css";
@@ -17,9 +16,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="pt-BR">
       <body>
         <ToastProvider>
-          <EditorialProvider>
-            <UnsavedGuardProvider>{children}</UnsavedGuardProvider>
-          </EditorialProvider>
+          <UnsavedGuardProvider>{children}</UnsavedGuardProvider>
         </ToastProvider>
       </body>
     </html>
