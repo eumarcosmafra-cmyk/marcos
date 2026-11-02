@@ -1,6 +1,19 @@
-# Integração futura — MAFRA LABS Editorial
+# Integração — MAFRA LABS Editorial
 
-Este painel roda hoje em **modo demonstração**: os dados ficam no `localStorage` do navegador, separados por projeto, sem autenticação e sem nenhuma integração. Este documento descreve como trocar a camada local pelos serviços reais sem reescrever as telas.
+## Estado atual (02/11/2026)
+
+**Conectado:** o painel real (`/fila`) lê e altera a **fila editorial V2 do n8n** (Data Table `Z8Fekq9qMO3DRWNA`, subworkflow `8zHUZGYSA0nPhMWI`) por meio de:
+
+1. backend do próprio painel (rotas Next.js, sessão assinada, entradas montadas a partir da sessão);
+2. workflow adaptador no n8n (`n8n/adaptador-painel.workflow.json`): Webhook com Header Auth na rede Docker interna, validação de operação/campos/escopo e Execute Sub-workflow fixo.
+
+Operações: `consultar`, `salvar_edicao`, `decidir`, mais as leituras restritas `ler_resumos` (títulos/datas) e `ler_versao` (texto de versões anteriores). Implantação e operação: [DEPLOY.md](./DEPLOY.md).
+
+**Ainda não conectado** (as seções abaixo continuam válidas para estas partes): planejamento de pautas e aprovação de pauta, enfileiramento, preparação de correção e retomada de etapas pagas, recibo de trechos do RAG (aba Fontes do protótipo), registro da revisão do professor, autorização de publicação e publicação no Astro, domínio com HTTPS.
+
+---
+
+O restante deste documento descreve a evolução prevista a partir do protótipo demonstrativo (`/p`), que guarda dados no `localStorage`.
 
 ## 1. Como o código está dividido
 
