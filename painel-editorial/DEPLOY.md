@@ -17,13 +17,13 @@ Navegador ──túnel SSH──▶ 127.0.0.1:3100 (painel-editorial, Next.js)
 
 ## Acesso (Windows / PowerShell)
 
-1. Abra o túnel (deixe a janela aberta enquanto usa o painel):
+1. Abra o túnel (deixe a janela aberta enquanto usa o painel). O mesmo túnel serve o n8n:
 
    ```powershell
-   ssh -i "$env:USERPROFILE\.ssh\n8n_oracle" -N -L 3100:127.0.0.1:3100 ubuntu@136.248.117.63
+   ssh -i "$env:USERPROFILE\.ssh\n8n_oracle" -N -L 5678:127.0.0.1:5678 -L 3100:127.0.0.1:3100 ubuntu@136.248.117.63
    ```
 
-2. No navegador: <http://localhost:3100>
+2. No navegador: painel em <http://localhost:3100>, n8n em <http://localhost:5678>.
 
 3. Usuário: `marcos`. A senha inicial foi gerada na VPS e **não** circula por chat. Para vê-la uma vez:
 
@@ -106,4 +106,8 @@ Definidos em `PAINEL_USUARIOS_B64` (JSON em base64 com hashes scrypt). Papéis:
 - Cookie de sessão httpOnly, `SameSite=Strict`, assinado (HMAC-SHA256), expira em `PAINEL_SESSAO_HORAS`.
 - Mutações exigem o cabeçalho `X-Painel-Requisicao` e origem igual ao host.
 - CSP restritiva, `X-Frame-Options: DENY`, Markdown sem HTML bruto.
-- Pendência conhecida, fora do escopo do painel: a porta 5678 do n8n está publicada em todas as interfaces, sem TLS. O adaptador exige token, mas o editor do n8n continua exposto se a Security List da Oracle liberar a porta.
+- Desde 02/11/2026 (23:18 UTC) o n8n escuta só em `127.0.0.1:5678` e a imagem está fixada no digest em uso (`docker.n8n.io/n8nio/n8n@sha256:d02752c6…386dfb`). Acesso externo apenas por túnel SSH.
+  - Backup do compose anterior: `~/n8n/docker-compose.yml.bak-20261102T231838Z`; banco: `~/painel-editorial-work/backup/n8n-pre-porta-20261102T231838Z.sqlite`.
+  - Reverter: `cd ~/n8n && cp -p docker-compose.yml.bak-20261102T231838Z docker-compose.yml && docker compose up -d --pull never n8n`, depois restaurar `~/painel-editorial-work/backup/n8n-files-20261102T231838Z/` em `/home/node/.n8n-files` (`docker cp` + `chown -R node:node`).
+  - Atenção: `/home/node/.n8n-files` não está em volume e se perde a cada recriação do container do n8n.
+  - Recomendado: remover a regra da porta 5678 na Security List da Oracle.
