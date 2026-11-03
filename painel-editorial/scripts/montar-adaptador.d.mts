@@ -6,6 +6,7 @@ export const CODIGO: {
   erroFila: string;
   encaminharProdutor: string;
   respostaProdutor: string;
+  repassarProdutor: string;
 };
 export const IDS: { workflowFila: string; workflowProdutor: string; tabelaFila: string; webhookId: string; path: string; credencialNome: string };
 export interface WorkflowNode {

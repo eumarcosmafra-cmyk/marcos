@@ -17,7 +17,7 @@ Navegador ──túnel SSH──▶ 127.0.0.1:3100 (painel-editorial, Next.js)
                               ▲
                               │ iniciar/concluir etapa
                         Kk56hrmdN3ljNUh0 — Produtor (Pesquisador → Redator → Revisor),
-                        disparado sem aguardar por "Retomar produção" / "Solicitar correção"
+                        executado pelo adaptador depois de responder ao painel ("Retomar produção" / "Solicitar correção")
 ```
 
 ## Acesso (Windows / PowerShell)
@@ -95,7 +95,8 @@ cd ~/painel-editorial && docker compose down
 - Credencial `Painel editorial - token do adaptador` (Header Auth, cabeçalho `X-Painel-Token`); o mesmo valor está em `N8N_ADAPTADOR_TOKEN` no `.env` do painel.
 - Operações aceitas (qualquer outra é recusada):
   - `consultar` (lista), `salvar_edicao`, `decidir`, `preparar_correcao` → subworkflow 8zHUZGYSA0nPhMWI;
-  - `retomar_producao` → produtor Kk56hrmdN3ljNUh0, **sem aguardar** (as etapas de agente levam minutos);
+  - `retomar_producao` → o adaptador **responde ao painel primeiro** e só então executa o produtor Kk56hrmdN3ljNUh0, aguardando o fim (as etapas levam minutos). O modo "sem aguardar" do n8n não serve aqui: a subexecução nascia vazia e era marcada como sucesso (execução 693, 03/11/2026). Aguardando, uma falha do produtor vira erro do adaptador, que guarda execuções com erro;
+  - `executionTimeout` do adaptador: 1900 s. O n8n limita a subexecução ao menor timeout entre ela e quem a chamou, e o produtor precisa de até 1800 s;
   - `ler_trabalho`, `ler_versao`, `ler_resumos` → somente leitura da Data Table, com conferência de `payload_sha256`.
 - `preparar_correcao` e `retomar_producao` exigem `autorizar_cobranca: true`, que o painel só envia depois que o editor marca a autorização no diálogo.
 - `ler_trabalho` devolve o mesmo recibo de `consultar` (conferido campo a campo com o código da fila), mas **sem ocupar a trava global**. A trava é a mesma que o produtor usa para gravar o resultado de cada agente, e ele não tenta de novo se a encontrar ocupada. Por isso o painel lê e acompanha trabalhos só por `ler_trabalho`.

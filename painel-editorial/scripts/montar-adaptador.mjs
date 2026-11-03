@@ -20,6 +20,7 @@ export const CODIGO = {
   erroFila: ler("erro-fila.js"),
   encaminharProdutor: ler("producao-encaminhar.js"),
   respostaProdutor: ler("producao-resposta.js"),
+  repassarProdutor: ler("producao-repassar.js"),
 };
 
 export const IDS = {
@@ -119,22 +120,34 @@ export function montarWorkflow(credencialId = "__CREDENCIAL_ID__") {
     lerTabela("a1000000-0000-4000-8000-00000000000d", "Ler trabalho do escopo", [1100, 260], true),
     ifNode("a1000000-0000-4000-8000-00000000000e", "Iniciar produção?", [1100, 520], "producao"),
     code("a1000000-0000-4000-8000-00000000000f", "Encaminhar pedido ao produtor", [1320, 640], CODIGO.encaminharProdutor),
+    code("a1000000-0000-4000-8000-000000000011", "Formatar início da produção", [1540, 640], CODIGO.respostaProdutor),
+    // As etapas de agente levam minutos: responde ao painel primeiro e só então executa o produtor.
+    // O modo "sem aguardar" (waitForSubWorkflow:false) não serve: nesta instalação a subexecução
+    // nascia vazia (nenhum nó) e era marcada como sucesso (execução 693, 03/11/2026).
+    {
+      id: "a1000000-0000-4000-8000-000000000012",
+      name: "Responder disparo ao painel",
+      type: "n8n-nodes-base.respondToWebhook",
+      typeVersion: 1.1,
+      position: [1760, 640],
+      parameters: { respondWith: "json", responseBody: "={{ $json.resposta }}", options: { responseCode: "={{ $json.http_status }}" } },
+    },
+    code("a1000000-0000-4000-8000-000000000013", "Repassar pedido ao produtor", [1980, 640], CODIGO.repassarProdutor),
     {
       id: "a1000000-0000-4000-8000-000000000010",
-      name: "Iniciar produtor sem aguardar",
+      name: "Executar produtor",
       type: "n8n-nodes-base.executeWorkflow",
       typeVersion: 1.4,
-      position: [1540, 640],
-      onError: "continueErrorOutput",
+      position: [2200, 640],
+      // Sem saída de erro: uma falha do produtor torna esta execução do adaptador "erro",
+      // e o adaptador guarda execuções com erro (saveDataErrorExecution: all).
       parameters: {
         source: "database",
         workflowId: { __rl: true, value: IDS.workflowProdutor, mode: "id" },
         mode: "once",
-        // As etapas de agente levam minutos: o painel acompanha pelo registro da fila.
-        options: { waitForSubWorkflow: false },
+        options: { waitForSubWorkflow: true },
       },
     },
-    code("a1000000-0000-4000-8000-000000000011", "Formatar início da produção", [1760, 580], CODIGO.respostaProdutor),
     {
       id: "a1000000-0000-4000-8000-00000000000b",
       name: "Responder ao painel",
@@ -155,9 +168,10 @@ export function montarWorkflow(credencialId = "__CREDENCIAL_ID__") {
     "Leitura de um trabalho?": { main: [[to("Ler trabalho do escopo")], [to("Iniciar produção?")]] },
     "Ler trabalho do escopo": { main: [[to("Leitura restrita da fila")]] },
     "Iniciar produção?": { main: [[to("Encaminhar pedido ao produtor")], [to("Encaminhar pedido à fila")]] },
-    "Encaminhar pedido ao produtor": { main: [[to("Iniciar produtor sem aguardar")]] },
-    "Iniciar produtor sem aguardar": { main: [[to("Formatar início da produção")], [to("Formatar falha da fila")]] },
-    "Formatar início da produção": { main: [[to("Responder ao painel")]] },
+    "Encaminhar pedido ao produtor": { main: [[to("Formatar início da produção")]] },
+    "Formatar início da produção": { main: [[to("Responder disparo ao painel")]] },
+    "Responder disparo ao painel": { main: [[to("Repassar pedido ao produtor")]] },
+    "Repassar pedido ao produtor": { main: [[to("Executar produtor")]] },
     "Leitura restrita da fila": { main: [[to("Responder ao painel")]] },
     "Encaminhar pedido à fila": { main: [[to("Executar operação da fila")]] },
     "Executar operação da fila": { main: [[to("Formatar resposta da fila")], [to("Formatar falha da fila")]] },
@@ -168,7 +182,7 @@ export function montarWorkflow(credencialId = "__CREDENCIAL_ID__") {
   return {
     name: "Painel editorial - adaptador autenticado (v1)",
     description:
-      "Ponte autenticada entre o painel editorial e a fila V2 (8zHUZGYSA0nPhMWI) / produtor (Kk56hrmdN3ljNUh0). Operações: consultar, salvar_edicao, decidir, preparar_correcao, retomar_producao (com autorização de cobrança), ler_trabalho, ler_versao, ler_resumos.",
+      "Ponte autenticada entre o painel editorial e a fila V2 (8zHUZGYSA0nPhMWI) / produtor (Kk56hrmdN3ljNUh0). Operações: consultar, salvar_edicao, decidir, preparar_correcao, retomar_producao (responde ao painel e executa o produtor, com autorização de cobrança), ler_trabalho, ler_versao, ler_resumos.",
     active: false,
     nodes,
     connections,

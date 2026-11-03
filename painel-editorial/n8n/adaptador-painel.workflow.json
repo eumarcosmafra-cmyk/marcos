@@ -1,6 +1,6 @@
 {
   "name": "Painel editorial - adaptador autenticado (v1)",
-  "description": "Ponte autenticada entre o painel editorial e a fila V2 (8zHUZGYSA0nPhMWI) / produtor (Kk56hrmdN3ljNUh0). Operações: consultar, salvar_edicao, decidir, preparar_correcao, retomar_producao (com autorização de cobrança), ler_trabalho, ler_versao, ler_resumos.",
+  "description": "Ponte autenticada entre o painel editorial e a fila V2 (8zHUZGYSA0nPhMWI) / produtor (Kk56hrmdN3ljNUh0). Operações: consultar, salvar_edicao, decidir, preparar_correcao, retomar_producao (responde ao painel e executa o produtor, com autorização de cobrança), ler_trabalho, ler_versao, ler_resumos.",
   "active": false,
   "nodes": [
     {
@@ -354,15 +354,61 @@
       }
     },
     {
-      "id": "a1000000-0000-4000-8000-000000000010",
-      "name": "Iniciar produtor sem aguardar",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.4,
+      "id": "a1000000-0000-4000-8000-000000000011",
+      "name": "Formatar início da produção",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         1540,
         640
       ],
-      "onError": "continueErrorOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Formatar início da produção\": resposta ao painel enviada ANTES de executar\n// o produtor (as etapas de agente podem levar minutos). Confirma só que o pedido foi\n// aceito; o resultado de cada etapa fica no registro da fila e é lido por `ler_trabalho`.\nconst p = $('Encaminhar pedido ao produtor').first().json;\nreturn [{ json: { http_status: 200, resposta: { ok: true, resultado: { producao_iniciada: true, job_key: p.job_key, revisao_esperada: p.revisao_esperada } } } }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000012",
+      "name": "Responder disparo ao painel",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        640
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.resposta }}",
+        "options": {
+          "responseCode": "={{ $json.http_status }}"
+        }
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000013",
+      "name": "Repassar pedido ao produtor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        640
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Repassar pedido ao produtor\": depois de responder ao painel, entrega ao\n// produtor o mesmo pedido validado (a saída do nó de resposta é a resposta, não o pedido).\nreturn [{ json: $('Encaminhar pedido ao produtor').first().json }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000010",
+      "name": "Executar produtor",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        2200,
+        640
+      ],
       "parameters": {
         "source": "database",
         "workflowId": {
@@ -372,23 +418,8 @@
         },
         "mode": "once",
         "options": {
-          "waitForSubWorkflow": false
+          "waitForSubWorkflow": true
         }
-      }
-    },
-    {
-      "id": "a1000000-0000-4000-8000-000000000011",
-      "name": "Formatar início da produção",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1760,
-        580
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "// Nó Code \"Formatar início da produção\": o produtor foi disparado sem aguardar\n// (as etapas de agente podem levar minutos). Isto confirma só o disparo; o\n// resultado de cada etapa fica no registro da fila e é lido por `ler_trabalho`.\nconst p = $('Encaminhar pedido ao produtor').first().json;\nreturn [{ json: { http_status: 200, resposta: { ok: true, resultado: { producao_iniciada: true, job_key: p.job_key, revisao_esperada: p.revisao_esperada } } } }];\n"
       }
     },
     {
@@ -530,25 +561,7 @@
       "main": [
         [
           {
-            "node": "Iniciar produtor sem aguardar",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Iniciar produtor sem aguardar": {
-      "main": [
-        [
-          {
             "node": "Formatar início da produção",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Formatar falha da fila",
             "type": "main",
             "index": 0
           }
@@ -559,7 +572,29 @@
       "main": [
         [
           {
-            "node": "Responder ao painel",
+            "node": "Responder disparo ao painel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder disparo ao painel": {
+      "main": [
+        [
+          {
+            "node": "Repassar pedido ao produtor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Repassar pedido ao produtor": {
+      "main": [
+        [
+          {
+            "node": "Executar produtor",
             "type": "main",
             "index": 0
           }

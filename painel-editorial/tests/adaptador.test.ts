@@ -89,6 +89,9 @@ describe("adaptador — validação do pedido", () => {
     expect(Object.keys(enviado).sort()).toEqual(["ambiente", "ator_id", "autorizar_cobranca", "cliente_id", "job_key", "revisao_esperada"]);
     const resposta = rodar(CODIGO.respostaProdutor, [{}], { "Encaminhar pedido ao produtor": [enviado] })[0].json;
     expect(resposta.resposta).toEqual({ ok: true, resultado: { producao_iniciada: true, job_key: JOB, revisao_esperada: 14 } });
+    // Depois da resposta, o produtor recebe o pedido, não a resposta.
+    const repassado = rodar(CODIGO.repassarProdutor, [resposta], { "Encaminhar pedido ao produtor": [enviado] })[0].json;
+    expect(repassado).toEqual(enviado);
   });
 });
 
@@ -228,14 +231,16 @@ describe("adaptador — respostas e estrutura do workflow", () => {
     expect(webhook?.credentials?.httpHeaderAuth.id).toBe("CRED123");
     const exec = wf.nodes.filter((n) => n.type === "n8n-nodes-base.executeWorkflow");
     expect(exec.map((n) => (n.parameters.workflowId as { value: string }).value).sort()).toEqual(["8zHUZGYSA0nPhMWI", "Kk56hrmdN3ljNUh0"]);
-    expect(exec.every((n) => n.onError === "continueErrorOutput")).toBe(true);
     const fila = exec.find((n) => (n.parameters.workflowId as { value: string }).value === "8zHUZGYSA0nPhMWI");
     const produtor = exec.find((n) => (n.parameters.workflowId as { value: string }).value === "Kk56hrmdN3ljNUh0");
     expect((fila?.parameters.options as { waitForSubWorkflow: boolean }).waitForSubWorkflow).toBe(true);
-    // As etapas de agente levam minutos: o produtor é disparado sem aguardar.
-    expect((produtor?.parameters.options as { waitForSubWorkflow: boolean }).waitForSubWorkflow).toBe(false);
-    expect(wf.connections["Encaminhar pedido ao produtor"].main[0][0].node).toBe("Iniciar produtor sem aguardar");
-    expect(wf.connections["Iniciar produção?"].main[0][0].node).toBe("Encaminhar pedido ao produtor");
+    expect(fila?.onError).toBe("continueErrorOutput");
+    // "Sem aguardar" gerava subexecução vazia no n8n: responde ao painel primeiro e executa aguardando.
+    expect((produtor?.parameters.options as { waitForSubWorkflow: boolean }).waitForSubWorkflow).toBe(true);
+    expect(produtor?.onError).toBeUndefined();
+    const cadeia = ["Iniciar produção?", "Encaminhar pedido ao produtor", "Formatar início da produção", "Responder disparo ao painel", "Repassar pedido ao produtor", "Executar produtor"];
+    for (let i = 0; i < cadeia.length - 1; i += 1) expect(wf.connections[cadeia[i]].main[0][0].node).toBe(cadeia[i + 1]);
+    expect(wf.nodes.find((n) => n.name === "Responder disparo ao painel")?.type).toBe("n8n-nodes-base.respondToWebhook");
     const tabelas = wf.nodes.filter((n) => n.type === "n8n-nodes-base.dataTable");
     expect(tabelas.every((n) => n.parameters.operation === "get")).toBe(true);
     const porChave = tabelas.find((n) => n.name === "Ler trabalho do escopo");

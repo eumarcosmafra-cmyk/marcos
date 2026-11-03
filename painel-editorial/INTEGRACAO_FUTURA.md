@@ -7,7 +7,7 @@
 1. backend do próprio painel (rotas Next.js, sessão assinada, entradas montadas a partir da sessão);
 2. workflow adaptador no n8n (`n8n/adaptador-painel.workflow.json`): Webhook com Header Auth na rede Docker interna, validação de operação/campos/escopo e Execute Sub-workflow fixo.
 
-Operações: `consultar`, `salvar_edicao`, `decidir`, `preparar_correcao`; `retomar_producao` (produtor Kk56hrmdN3ljNUh0, sem aguardar, com autorização explícita de cobrança); leituras restritas `ler_trabalho` (recibo de `consultar` sem trava), `ler_resumos` (títulos/datas) e `ler_versao` (texto de versões anteriores). Implantação e operação: [DEPLOY.md](./DEPLOY.md).
+Operações: `consultar`, `salvar_edicao`, `decidir`, `preparar_correcao`; `retomar_producao` (responde ao painel e executa o produtor Kk56hrmdN3ljNUh0, com autorização explícita de cobrança); leituras restritas `ler_trabalho` (recibo de `consultar` sem trava), `ler_resumos` (títulos/datas) e `ler_versao` (texto de versões anteriores). Implantação e operação: [DEPLOY.md](./DEPLOY.md).
 
 **Ainda não conectado** (as seções abaixo continuam válidas para estas partes): planejamento de pautas e aprovação de pauta, enfileiramento, recibo de trechos do RAG (aba Fontes do protótipo), registro da revisão do professor (não existe operação na fila), autorização de publicação e publicação no Astro, domínio com HTTPS.
 
