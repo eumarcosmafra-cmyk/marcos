@@ -25,7 +25,7 @@ describe("adaptador — validação do pedido", () => {
   });
 
   it("recusa operações fora da lista do painel", () => {
-    for (const op of ["enfileirar", "aprovar_pauta", "preparar_correcao", "retomar", "iniciar_etapa"]) {
+    for (const op of ["enfileirar", "aprovar_pauta", "retomar", "iniciar_etapa", "concluir_etapa", "falha_etapa", "importar_rascunho"]) {
       const r = validar({ operacao: op, entrada: base });
       expect(r.rota).toBe("recusa");
       expect((r.resposta as { erro: { codigo: string } }).erro.codigo).toBe("operacao_nao_permitida");
@@ -54,9 +54,41 @@ describe("adaptador — validação do pedido", () => {
     expect((validar({ operacao: "decidir", entrada: { ...d, confirmo_revisao_editorial: false, motivos: ["Rever a abertura."] } }).resposta as { erro: { codigo: string } }).erro.codigo).toBe("confirmacao_ausente");
   });
 
-  it("leituras restritas seguem pela rota de leitura", () => {
+  it("leituras restritas seguem pela rota de leitura (lista ou um trabalho)", () => {
     expect(validar({ operacao: "ler_resumos", entrada: base }).rota).toBe("leitura");
-    expect(validar({ operacao: "ler_versao", entrada: { ...base, job_key: JOB, numero: 1 } }).rota).toBe("leitura");
+    expect(validar({ operacao: "ler_versao", entrada: { ...base, job_key: JOB, numero: 1 } }).rota).toBe("leitura_trabalho");
+    expect(validar({ operacao: "ler_trabalho", entrada: { ...base, job_key: JOB } }).rota).toBe("leitura_trabalho");
+    expect(validar({ operacao: "ler_trabalho", entrada: base }).rota).toBe("recusa");
+  });
+
+  const codigo = (r: Record<string, unknown>) => (r.resposta as { erro: { codigo: string } }).erro.codigo;
+
+  it("preparar_correcao exige autorização explícita de cobrança e op_id do editor", () => {
+    const c = { ...base, job_key: JOB, op_id: "painel:marcos_mafra:abcd1234-ef", revisao_esperada: 13, artigo_sha256: SHA, autorizar_cobranca: true, ator_id: "marcos_mafra" };
+    const ok = validar({ operacao: "preparar_correcao", entrada: c });
+    expect(ok.rota).toBe("fila");
+    expect(ok.pedido).toEqual({ operacao: "preparar_correcao", ...c });
+    expect(codigo(validar({ operacao: "preparar_correcao", entrada: { ...c, autorizar_cobranca: false } }))).toBe("cobranca_nao_autorizada");
+    expect(codigo(validar({ operacao: "preparar_correcao", entrada: { ...c, autorizar_cobranca: "sim" } }))).toBe("cobranca_nao_autorizada");
+    expect(codigo(validar({ operacao: "preparar_correcao", entrada: { ...c, op_id: "x" } }))).toBe("op_id_invalido");
+    expect(codigo(validar({ operacao: "preparar_correcao", entrada: { ...c, motivos: ["inventado pelo chamador"] } }))).toBe("campo_nao_permitido");
+  });
+
+  it("retomar_producao vai ao produtor só com editor, revisão e autorização", () => {
+    const r = { ...base, job_key: JOB, revisao_esperada: 14, autorizar_cobranca: true, ator_id: "marcos_mafra" };
+    const ok = validar({ operacao: "retomar_producao", entrada: r });
+    expect(ok.rota).toBe("producao");
+    expect(codigo(validar({ operacao: "retomar_producao", entrada: { ...r, autorizar_cobranca: false } }))).toBe("cobranca_nao_autorizada");
+    expect(codigo(validar({ operacao: "retomar_producao", entrada: { ...r, ator_id: "leitor_teste" } }))).toBe("editor_nao_autorizado");
+    expect(codigo(validar({ operacao: "retomar_producao", entrada: { ...r, revisao_esperada: 0 } }))).toBe("revisao_invalida");
+    for (const extra of [{ modo_execucao: "real" }, { fixture: {} }, { etapa: "redator" }, { op_id: "painel:marcos_mafra:abcd1234-ef" }]) {
+      expect(codigo(validar({ operacao: "retomar_producao", entrada: { ...r, ...extra } }))).toBe("campo_nao_permitido");
+    }
+    // O produtor recusa qualquer campo além destes seis (incluindo `operacao`).
+    const enviado = rodar(CODIGO.encaminharProdutor, [ok])[0].json;
+    expect(Object.keys(enviado).sort()).toEqual(["ambiente", "ator_id", "autorizar_cobranca", "cliente_id", "job_key", "revisao_esperada"]);
+    const resposta = rodar(CODIGO.respostaProdutor, [{}], { "Encaminhar pedido ao produtor": [enviado] })[0].json;
+    expect(resposta.resposta).toEqual({ ok: true, resultado: { producao_iniciada: true, job_key: JOB, revisao_esperada: 14 } });
   });
 });
 
@@ -96,6 +128,84 @@ describe("adaptador — leitura restrita", () => {
     expect(v.sha256_confere).toBe(true);
   });
 
+  // Mesmo recibo de `consultar` (qSummary da fila), com complementos do painel.
+  const decisao = { decisao: "devolver", motivos: ["Rever a abertura do texto."], artigo_sha256: sha256(md2), versao_artigo: 2, ator_id: "marcos_mafra", em: "z" };
+  const completo = {
+    ...payload,
+    pauta_id: "P004",
+    revisao: 13,
+    estado: "devolvido",
+    etapa: "decisao_editorial",
+    pacote: { research_input: { pauta: { ...payload.pacote.research_input.pauta, keyword: "wai kru significado" } } },
+    etapas: { pesquisador: { briefing_markdown: "b" } },
+    decisoes: [decisao],
+    historico: [{ evento: "decisao_registrada", em: "z" }],
+    operacoes: [{ id: "segredo-operacional" }],
+    pendencias: ["p1"],
+    inflight: null,
+    chamadas_api_reservadas: 4,
+    chamadas_api_com_uso_confirmado: 4,
+    max_api_ciclo: 4,
+    controle: { aprovacao_editorial: false, aprovacao_professor: false, publicacao_autorizada: false },
+  };
+  const textoCompleto = JSON.stringify(completo);
+  const linhaCompleta = { ...linha, payload_json: textoCompleto, payload_sha256: sha256(textoCompleto) };
+  const lerTrabalho = (linhas: Record<string, unknown>[]) =>
+    rodar(CODIGO.leitura, linhas, { "Validar pedido do painel": [{ pedido: { operacao: "ler_trabalho", ...base, job_key: JOB } }] })[0].json.resposta as {
+      ok: boolean;
+      resultado: Record<string, unknown>;
+      erro?: { codigo: string };
+    };
+
+  it("ler_trabalho devolve o recibo de consultar sem passar pela trava", () => {
+    const r = lerTrabalho([linhaCompleta]);
+    expect(r.ok).toBe(true);
+    expect(r.resultado).toMatchObject({
+      job_key: JOB,
+      pauta_id: "P004",
+      keyword: "wai kru significado",
+      estado: "devolvido",
+      revisao: 13,
+      versao_artigo: 2,
+      artigo_sha256: sha256(md2),
+      artigo_markdown: md2,
+      decisao_atual: decisao,
+      pendencias: ["p1"],
+      pendencias_sha256: sha256(JSON.stringify(["p1"])),
+      reserva: null,
+      chamadas_api_reservadas: 4,
+      chamadas_api_com_uso_confirmado: 4,
+      controle: { aprovacao_editorial: false, aprovacao_professor: false, publicacao_autorizada: false },
+      proxima_etapa: null,
+      retomada_bloqueada: false,
+      leitura_sem_trava: true,
+      max_api_ciclo: 4,
+      correcao_disponivel: true,
+      titulo_artigo: "Wai Kru: significado",
+    });
+    expect((r.resultado.versoes as Record<string, unknown>[])[0]).not.toHaveProperty("markdown");
+    const json = JSON.stringify(r);
+    expect(json).not.toContain("segredo-operacional");
+    expect(json).not.toContain("briefing_markdown");
+  });
+
+  it("ler_trabalho mostra reserva e próxima etapa; recusa registro adulterado ou de outro escopo", () => {
+    const emExecucao = { ...completo, estado: "executando", inflight: { lease: "L", etapa: "redator", em: "w", execucao_id: "777" } };
+    const t = JSON.stringify(emExecucao);
+    const r = lerTrabalho([{ ...linha, payload_json: t, payload_sha256: sha256(t) }]);
+    expect(r.resultado.reserva).toEqual({ etapa: "redator", em: "w", execucao_id: "777" });
+    expect(r.resultado.retomada_bloqueada).toBe(true);
+    expect(JSON.stringify(r)).not.toContain('"L"');
+    const parado = { ...completo, estado: "aguardando_redacao" };
+    const tp = JSON.stringify(parado);
+    expect(lerTrabalho([{ ...linha, payload_json: tp, payload_sha256: sha256(tp) }]).resultado.proxima_etapa).toBe("redator");
+    expect(lerTrabalho([{ ...linhaCompleta, payload_sha256: SHA }]).erro?.codigo).toBe("trabalho_alterado");
+    expect(lerTrabalho([{}]).erro?.codigo).toBe("trabalho_nao_encontrado");
+    const outro = { ...completo, ambiente: "producao" };
+    const to = JSON.stringify(outro);
+    expect(lerTrabalho([{ ...linha, ambiente: "producao", payload_json: to, payload_sha256: sha256(to) }]).erro?.codigo).toBe("isolamento_da_fila");
+  });
+
   it("recusa registro adulterado", () => {
     const adulterada = { ...linha, payload_json: texto.replace("Título antigo", "Título alterado") };
     const out = rodar(CODIGO.leitura, [adulterada], { "Validar pedido do painel": [{ pedido: { operacao: "ler_versao", ...base, job_key: JOB, numero: 1 } }] })[0].json;
@@ -117,11 +227,19 @@ describe("adaptador — respostas e estrutura do workflow", () => {
     expect(webhook?.parameters).toMatchObject({ httpMethod: "POST", authentication: "headerAuth", path: IDS.path, responseMode: "responseNode" });
     expect(webhook?.credentials?.httpHeaderAuth.id).toBe("CRED123");
     const exec = wf.nodes.filter((n) => n.type === "n8n-nodes-base.executeWorkflow");
-    expect(exec).toHaveLength(1);
-    expect((exec[0].parameters.workflowId as { value: string }).value).toBe("8zHUZGYSA0nPhMWI");
-    expect(exec[0].onError).toBe("continueErrorOutput");
+    expect(exec.map((n) => (n.parameters.workflowId as { value: string }).value).sort()).toEqual(["8zHUZGYSA0nPhMWI", "Kk56hrmdN3ljNUh0"]);
+    expect(exec.every((n) => n.onError === "continueErrorOutput")).toBe(true);
+    const fila = exec.find((n) => (n.parameters.workflowId as { value: string }).value === "8zHUZGYSA0nPhMWI");
+    const produtor = exec.find((n) => (n.parameters.workflowId as { value: string }).value === "Kk56hrmdN3ljNUh0");
+    expect((fila?.parameters.options as { waitForSubWorkflow: boolean }).waitForSubWorkflow).toBe(true);
+    // As etapas de agente levam minutos: o produtor é disparado sem aguardar.
+    expect((produtor?.parameters.options as { waitForSubWorkflow: boolean }).waitForSubWorkflow).toBe(false);
+    expect(wf.connections["Encaminhar pedido ao produtor"].main[0][0].node).toBe("Iniciar produtor sem aguardar");
+    expect(wf.connections["Iniciar produção?"].main[0][0].node).toBe("Encaminhar pedido ao produtor");
     const tabelas = wf.nodes.filter((n) => n.type === "n8n-nodes-base.dataTable");
     expect(tabelas.every((n) => n.parameters.operation === "get")).toBe(true);
+    const porChave = tabelas.find((n) => n.name === "Ler trabalho do escopo");
+    expect(JSON.stringify(porChave?.parameters.filters)).toContain('"keyName":"job_key"');
     for (const [origem, c] of Object.entries(wf.connections)) {
       expect(wf.nodes.some((n) => n.name === origem)).toBe(true);
       for (const saida of c.main) for (const destino of saida) expect(wf.nodes.some((n) => n.name === destino.node)).toBe(true);

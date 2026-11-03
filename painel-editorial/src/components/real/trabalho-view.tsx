@@ -5,11 +5,13 @@ import {
   ArrowLeft,
   BadgeCheck,
   BookOpenCheck,
+  Bot,
   CheckCircle2,
   FileText,
   GraduationCap,
   History,
   Loader2,
+  Play,
   RefreshCw,
   RotateCcw,
   TriangleAlert,
@@ -30,8 +32,23 @@ import { EditorReal } from "./editor-real";
 import { HistoricoReal } from "./historico-real";
 import { estadoMeta } from "./labels";
 import { LoadError } from "./load-state";
+import { ProducaoDialog, type RespostaProducao, type TipoProducao } from "./producao-dialog";
 
 type Aba = "artigo" | "pendencias" | "historico";
+
+const NOME_ETAPA: Record<string, string> = { pesquisador: "Pesquisador", redator: "Redator", revisor: "Revisor" };
+const nomeEtapa = (e: string) => NOME_ETAPA[e] ?? e;
+/** Intervalo de acompanhamento. A leitura não usa a trava da fila. */
+const ACOMPANHAR_MS = 10_000;
+/** executionTimeout do produtor (1800 s) + folga: depois disso a reserva provavelmente ficou órfã. */
+const RESERVA_VENCIDA_MS = 35 * 60 * 1000;
+/** Sem reserva e sem mudança de revisão por este tempo depois do disparo: o produtor não avançou. */
+const SEM_AVANCO_MS = 2 * 60 * 1000;
+
+interface Acompanhamento {
+  revisao: number;
+  desde: number;
+}
 
 function Situacao({ titulo, valor, ok, icon: Icon, detalhe }: { titulo: string; valor: string; ok: boolean; icon: LucideIcon; detalhe?: string }) {
   return (
@@ -65,6 +82,10 @@ export function TrabalhoView({ jobKey, ambiente }: { jobKey: string; ambiente: A
   const [tentativa, setTentativa] = useState(0);
   const [aba, setAba] = useState<Aba>("artigo");
   const [decisao, setDecisao] = useState<"aprovar" | "devolver" | null>(null);
+  const [producao, setProducao] = useState<TipoProducao | null>(null);
+  const [acompanhamento, setAcompanhamento] = useState<Acompanhamento | null>(null);
+  const [avisoProducao, setAvisoProducao] = useState<string | null>(null);
+  const [lidoEm, setLidoEm] = useState(0);
   const [editorKey, setEditorKey] = useState(0);
 
   const recarregar = useCallback(() => setTentativa((n) => n + 1), []);
@@ -74,7 +95,10 @@ export function TrabalhoView({ jobKey, ambiente }: { jobKey: string; ambiente: A
     setCarregando(true);
     setErro(null);
     api<{ trabalho: TrabalhoDTO }>(`/api/fila/${jobKey}?ambiente=${ambiente}`, { signal: ctrl.signal })
-      .then((r) => setT(r.trabalho))
+      .then((r) => {
+        setT(r.trabalho);
+        setLidoEm(Date.now());
+      })
       .catch((e) => {
         if (e instanceof DOMException && e.name === "AbortError") return;
         console.error("[trabalho] Erro ao carregar:", e);
@@ -83,6 +107,63 @@ export function TrabalhoView({ jobKey, ambiente }: { jobKey: string; ambiente: A
       .finally(() => setCarregando(false));
     return () => ctrl.abort();
   }, [jobKey, ambiente, tentativa]);
+
+  const reservaVencida = Boolean(t?.reserva && lidoEm - Date.parse(t.reserva.em) > RESERVA_VENCIDA_MS);
+  const seguir = Boolean(t && !reservaVencida && (t.acoes.em_producao || (acompanhamento && t.proxima_etapa)));
+
+  // Acompanha a produção em segundo plano relendo o registro (sem trava) a cada 10 s.
+  useEffect(() => {
+    if (!seguir || carregando) return;
+    const id = window.setTimeout(recarregar, ACOMPANHAR_MS);
+    return () => window.clearTimeout(id);
+  }, [seguir, carregando, tentativa, recarregar]);
+
+  // Encerra o acompanhamento quando o produtor termina ou deixa de avançar.
+  useEffect(() => {
+    if (!t || !acompanhamento) return;
+    if (t.revisao !== acompanhamento.revisao) {
+      setAcompanhamento({ revisao: t.revisao, desde: lidoEm });
+      return;
+    }
+    if (t.reserva) return;
+    if (!t.proxima_etapa) {
+      setAcompanhamento(null);
+      const parou = t.estado === "bloqueado_integridade" || t.estado === "resultado_incerto";
+      toast.show({
+        tone: parou ? "danger" : "success",
+        message: parou
+          ? `Produção parou: ${estadoMeta(t.estado).label} (artigo na v${t.versao_artigo}). Veja as pendências do registro.`
+          : `Produção concluída: ${estadoMeta(t.estado).label}, artigo na v${t.versao_artigo}.`,
+      });
+      setEditorKey((k) => k + 1);
+      return;
+    }
+    if (lidoEm - acompanhamento.desde > SEM_AVANCO_MS) {
+      setAcompanhamento(null);
+      setAvisoProducao(
+        `O produtor não reservou a etapa ${nomeEtapa(t.proxima_etapa)} em 2 minutos. Ele pode ter recusado o disparo (versão mudou, limite de chamadas ou etapa já reservada). Recarregue e, se continuar parado, use “Retomar produção”.`,
+      );
+    }
+  }, [t, acompanhamento, lidoEm, toast]);
+
+  const producaoDisparada = (r: RespostaProducao) => {
+    setProducao(null);
+    if (r.producao_iniciada) {
+      setAvisoProducao(null);
+      setAcompanhamento({ revisao: r.correcao?.revisao ?? t?.revisao ?? 0, desde: Date.now() });
+      toast.show({
+        tone: "success",
+        message: r.correcao
+          ? `Correção autorizada (revisão ${r.correcao.revisao}). Redator e Revisor rodam em segundo plano; esta tela acompanha.`
+          : "Produção iniciada em segundo plano; esta tela acompanha.",
+      });
+    } else {
+      setAvisoProducao(
+        `Correção autorizada${r.correcao ? ` (revisão ${r.correcao.revisao})` : ""}, mas o produtor não iniciou: ${r.erro_producao?.mensagem ?? "motivo não informado"} (${r.erro_producao?.codigo ?? "SEM_CODIGO"}). Nenhuma chamada foi feita; use “Retomar produção”.`,
+      );
+    }
+    recarregar();
+  };
 
   const concluido = (mensagem: string) => {
     setDecisao(null);
@@ -164,18 +245,63 @@ export function TrabalhoView({ jobKey, ambiente }: { jobKey: string; ambiente: A
           <button type="button" className="btn-primary" onClick={() => setDecisao("aprovar")} disabled={!t.acoes.pode_aprovar} title={t.acoes.pode_aprovar ? undefined : t.acoes.bloqueios.join(" ")}>
             <BookOpenCheck className="h-4 w-4" aria-hidden /> Aprovar editorialmente
           </button>
+          {t.estado === "devolvido" ? (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setProducao("correcao")}
+              disabled={!t.acoes.pode_solicitar_correcao}
+              title={t.acoes.pode_solicitar_correcao ? "Redator reescreve com os motivos da devolução; Revisor confere" : t.acoes.bloqueios_producao.join(" ")}
+            >
+              <Bot className="h-4 w-4" aria-hidden /> Solicitar correção
+            </button>
+          ) : null}
+          {t.proxima_etapa && !t.reserva && !acompanhamento ? (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setProducao("retomar")}
+              disabled={!t.acoes.pode_retomar_producao}
+              title={t.acoes.pode_retomar_producao ? `Disparar o produtor a partir da etapa ${nomeEtapa(t.proxima_etapa)}` : t.acoes.bloqueios_producao.join(" ")}
+            >
+              <Play className="h-4 w-4" aria-hidden /> Retomar produção
+            </button>
+          ) : null}
           <button type="button" className="btn-ghost" onClick={recarregar} disabled={carregando}>
             {carregando ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />} Recarregar
           </button>
         </div>
-        {t.acoes.bloqueios.length ? (
+        {t.acoes.bloqueios.length || t.acoes.bloqueios_producao.length ? (
           <ul className="mt-2 list-disc pl-5 text-xs text-muted">
-            {t.acoes.bloqueios.map((b) => (
+            {[...t.acoes.bloqueios, ...t.acoes.bloqueios_producao].map((b) => (
               <li key={b}>{b}</li>
             ))}
           </ul>
         ) : null}
-        {t.reserva ? <Notice tone="info" className="mt-3">Etapa “{t.reserva.etapa}” reservada em {formatDateTime(t.reserva.em)}. Ações ficam bloqueadas até a conclusão.</Notice> : null}
+        {t.reserva ? (
+          reservaVencida ? (
+            <Notice tone="danger" className="mt-3" icon={TriangleAlert}>
+              A etapa {nomeEtapa(t.reserva.etapa)} está reservada desde {formatDateTime(t.reserva.em)}, além do limite de 30 min do produtor. A execução
+              {t.reserva.execucao_id ? ` ${t.reserva.execucao_id}` : ""} pode ter falhado sem gravar o resultado; a fila não repete sozinha. Confira no n8n antes de qualquer ação.
+            </Notice>
+          ) : (
+            <Notice tone="info" className="mt-3" icon={Bot}>
+              <span role="status">
+                Etapa {nomeEtapa(t.reserva.etapa)} em execução desde {formatDateTime(t.reserva.em)}
+                {t.reserva.execucao_id ? ` (execução n8n ${t.reserva.execucao_id})` : ""}. Edição e decisões ficam bloqueadas; esta tela atualiza a cada 10 s.
+              </span>
+            </Notice>
+          )
+        ) : acompanhamento && t.proxima_etapa ? (
+          <Notice tone="info" className="mt-3" icon={Bot}>
+            <span role="status">Aguardando o produtor reservar a etapa {nomeEtapa(t.proxima_etapa)}…</span>
+          </Notice>
+        ) : null}
+        {avisoProducao ? (
+          <Notice tone="warning" className="mt-3" icon={TriangleAlert}>
+            {avisoProducao}
+          </Notice>
+        ) : null}
       </header>
 
       <Tabs tabs={abas} active={aba} onChange={setAba} idPrefix="trab" label="Áreas do trabalho" />
@@ -213,6 +339,9 @@ export function TrabalhoView({ jobKey, ambiente }: { jobKey: string; ambiente: A
         ) : null}
       </div>
 
+      {producao ? (
+        <ProducaoDialog key={`${producao}-${t.revisao}`} trabalho={t} ambiente={ambiente} tipo={producao} onClose={() => setProducao(null)} onDone={producaoDisparada} />
+      ) : null}
       {decisao ? <DecisaoDialog key={`${decisao}-${t.revisao}`} trabalho={t} ambiente={ambiente} tipo={decisao} onClose={() => setDecisao(null)} onDone={concluido} /> : null}
     </div>
   );

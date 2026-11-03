@@ -8,7 +8,15 @@ import { PainelError } from "../painel-error";
  * dois chega ao navegador.
  */
 
-export type AdapterOperation = "consultar" | "salvar_edicao" | "decidir" | "ler_versao" | "ler_resumos";
+export type AdapterOperation =
+  | "consultar"
+  | "salvar_edicao"
+  | "decidir"
+  | "preparar_correcao"
+  | "retomar_producao"
+  | "ler_trabalho"
+  | "ler_versao"
+  | "ler_resumos";
 
 export interface AdapterEnvelope {
   ok?: boolean;

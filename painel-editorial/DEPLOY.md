@@ -9,10 +9,15 @@ Navegador ──túnel SSH──▶ 127.0.0.1:3100 (painel-editorial, Next.js)
                         http://n8n:5678/webhook/painel-editorial/v1
                         (workflow "Painel editorial - adaptador autenticado (v1)",
                          Header Auth X-Painel-Token, valida operação e escopo)
-                              │  Execute Sub-workflow (fixo)
-                              ▼
-                        8zHUZGYSA0nPhMWI — Fila, versões e aprovação editorial
-                        (Data Table Z8Fekq9qMO3DRWNA, trava, revisão esperada, hash)
+                              │  Execute Sub-workflow (fixo)          │ leitura sem trava
+                              ▼                                       ▼
+                        8zHUZGYSA0nPhMWI — Fila, versões      Data Table Z8Fekq9qMO3DRWNA
+                        e aprovação editorial                 (confere payload_sha256)
+                        (trava, revisão esperada, hash)
+                              ▲
+                              │ iniciar/concluir etapa
+                        Kk56hrmdN3ljNUh0 — Produtor (Pesquisador → Redator → Revisor),
+                        disparado sem aguardar por "Retomar produção" / "Solicitar correção"
 ```
 
 ## Acesso (Windows / PowerShell)
@@ -88,10 +93,24 @@ cd ~/painel-editorial && docker compose down
 
 - Workflow gerado por `node scripts/montar-adaptador.mjs --credencial-id=<CID> --workflow-id=<WID>` a partir de `n8n/adaptador/*.js` (código dos nós, testado em `tests/adaptador.test.ts`).
 - Credencial `Painel editorial - token do adaptador` (Header Auth, cabeçalho `X-Painel-Token`); o mesmo valor está em `N8N_ADAPTADOR_TOKEN` no `.env` do painel.
-- Operações aceitas: `consultar`, `salvar_edicao`, `decidir` (repassadas ao subworkflow 8zHUZGYSA0nPhMWI) e as leituras `ler_resumos` e `ler_versao` (somente leitura da Data Table, com conferência de `payload_sha256`). Qualquer outra é recusada.
+- Operações aceitas (qualquer outra é recusada):
+  - `consultar` (lista), `salvar_edicao`, `decidir`, `preparar_correcao` → subworkflow 8zHUZGYSA0nPhMWI;
+  - `retomar_producao` → produtor Kk56hrmdN3ljNUh0, **sem aguardar** (as etapas de agente levam minutos);
+  - `ler_trabalho`, `ler_versao`, `ler_resumos` → somente leitura da Data Table, com conferência de `payload_sha256`.
+- `preparar_correcao` e `retomar_producao` exigem `autorizar_cobranca: true`, que o painel só envia depois que o editor marca a autorização no diálogo.
+- `ler_trabalho` devolve o mesmo recibo de `consultar` (conferido campo a campo com o código da fila), mas **sem ocupar a trava global**. A trava é a mesma que o produtor usa para gravar o resultado de cada agente, e ele não tenta de novo se a encontrar ocupada. Por isso o painel lê e acompanha trabalhos só por `ler_trabalho`.
 - Cliente (`altovaletopteam_com_br`) e editores (`marcos_mafra`) permitidos estão fixos no nó "Validar pedido do painel"; o subworkflow ainda confere o cadastro do cliente.
 - Para trocar o token: gerar novo valor, atualizar a credencial no n8n e `N8N_ADAPTADOR_TOKEN` no `.env`, depois `docker compose up -d --force-recreate`.
 - Publicar ou alterar workflow pelo CLI do n8n só vale após reiniciar o n8n (`docker restart n8n`). Pela interface do n8n, a publicação é imediata.
+
+## Correção e retomada (etapas pagas)
+
+- **Solicitar correção** (estado `devolvido`, devolução vigente na versão atual): `preparar_correcao` libera exatamente 3 chamadas novas (Redator 1 + Revisor 2), sem nova pesquisa, e o painel dispara o produtor.
+- **Retomar produção** (estados `aguardando_briefing`, `aguardando_redacao` ou `aguardando_revisao` sem reserva): antes de disparar, o painel confere revisão, reserva e limite de chamadas do ciclo (`max_api_ciclo`).
+- O diálogo mostra o número máximo de chamadas e o uso já registrado. Valor em reais não aparece porque a fila não o informa.
+- Acompanhamento: relê o registro a cada 10 s, sem trava. Uma reserva com mais de 35 min (o limite do produtor é 30 min) é sinalizada como possivelmente órfã. Se o produtor não reservar a etapa em 2 min, o painel avisa e para de acompanhar.
+- Registros `teste` com `modo_execucao: simulado` usam respostas preservadas (fixtures), sem IA. Depois de uma correção, o Revisor preservado não confere com o briefing corrigido, e a fila marca `bloqueado_integridade`. Isso é esperado nesse modo.
+- Risco que continua: outras operações que pegam a trava (edição, decisão, automações externas) ainda podem coincidir com a gravação de uma etapa. Recomendação para o produtor (fora do painel): tentar de novo `Persistir resultado da etapa N` quando a trava estiver ocupada.
 
 ## Usuários
 

@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { hashPassword, verifyPassword } from "@/server/auth/password";
 import { createSessionToken, readSessionToken, resolveSessionUser } from "@/server/auth/session";
-import { buildDecisao, buildEdicao, decisaoSchema, edicaoSchema, parseBody } from "@/server/fila/inputs";
+import {
+  buildCorrecao,
+  buildDecisao,
+  buildEdicao,
+  buildProducao,
+  correcaoSchema,
+  decisaoSchema,
+  edicaoSchema,
+  parseBody,
+  producaoSchema,
+} from "@/server/fila/inputs";
 import { mapQueueError } from "@/server/fila/errors";
-import { sanitizeResumo, sanitizeTrabalho } from "@/server/fila/sanitize";
+import { resumoDeLeitura, sanitizeResumo, sanitizeTrabalho } from "@/server/fila/sanitize";
 import { PainelError } from "@/server/painel-error";
 import type { UsuarioConfig } from "@/server/config";
 
@@ -62,11 +72,40 @@ describe("entradas montadas pela sessão", () => {
     expect(sem).not.toHaveProperty("pendencias_sha256");
   });
 
+  it("correção e produção exigem autorização explícita; cliente e ator vêm da sessão", () => {
+    const base = { op_uuid: "abcd1234-ef", revisao_esperada: 13, artigo_sha256: SHA };
+    expect(() => parseBody(correcaoSchema, base)).toThrow(/autorização/);
+    expect(() => parseBody(correcaoSchema, { ...base, autorizo_chamadas_pagas: false })).toThrow(/autorização/);
+    expect(() => parseBody(correcaoSchema, { ...base, autorizo_chamadas_pagas: true, motivos: ["x"] })).toThrow(PainelError);
+    const c = buildCorrecao(marcos, "teste", JOB, parseBody(correcaoSchema, { ...base, autorizo_chamadas_pagas: true }));
+    expect(c).toEqual({
+      cliente_id: "altovaletopteam_com_br",
+      ambiente: "teste",
+      job_key: JOB,
+      op_id: "painel:marcos_mafra:abcd1234-ef",
+      revisao_esperada: 13,
+      artigo_sha256: SHA,
+      autorizar_cobranca: true,
+      ator_id: "marcos_mafra",
+    });
+    expect(() => parseBody(producaoSchema, { revisao_esperada: 14, autorizo_chamadas_pagas: true, ator_id: "outro" })).toThrow(PainelError);
+    expect(buildProducao(marcos, "teste", JOB, 14)).toEqual({
+      cliente_id: "altovaletopteam_com_br",
+      ambiente: "teste",
+      job_key: JOB,
+      revisao_esperada: 14,
+      autorizar_cobranca: true,
+      ator_id: "marcos_mafra",
+    });
+  });
+
   it("códigos da fila viram erros identificáveis", () => {
     expect(mapQueueError("conflito_de_versao", "").code).toBe("VERSAO_DESATUALIZADA");
     expect(mapQueueError("pendencias_exigem_decisao_explicita", "").status).toBe(422);
     expect(mapQueueError("controle_ocupado_ou_indisponivel", "").code).toBe("FILA_OCUPADA");
     expect(mapQueueError("algo_novo", "texto").detail).toEqual({ codigo_fila: "algo_novo" });
+    expect(mapQueueError("devolucao_ja_consumida_ou_de_outra_versao", "").code).toBe("CORRECAO_INDISPONIVEL");
+    expect(mapQueueError("limite_de_chamadas", "").code).toBe("LIMITE_DE_CHAMADAS");
   });
 });
 
@@ -113,5 +152,36 @@ describe("sanitização", () => {
     expect(t?.acoes.pode_aprovar).toBe(false);
     expect(t?.acoes.pode_devolver).toBe(true);
     expect(t?.acoes.pode_editar).toBe(true);
+  });
+
+  const devolucao = { decisao: "devolver", motivos: ["Rever a abertura."], artigo_sha256: SHA, versao_artigo: 1, ator_id: "marcos_mafra", em: "z" };
+  const devolvido = { ...bruto, estado: "devolvido", decisao_atual: devolucao, correcao_disponivel: true, chamadas_api_reservadas: 4, max_api_ciclo: 4 };
+
+  it("correção só a partir da devolução vigente, com briefing e sem etapa reservada", () => {
+    const t = sanitizeTrabalho(devolvido, "producao", true);
+    expect(t?.acoes.pode_solicitar_correcao).toBe(true);
+    expect(t?.chamadas).toEqual({ reservadas: 4, com_uso_confirmado: 0, limite_do_ciclo: 4 });
+    expect(sanitizeTrabalho(devolvido, "producao", false)?.acoes.pode_solicitar_correcao).toBe(false);
+    expect(sanitizeTrabalho({ ...devolvido, decisao_atual: { ...devolucao, artigo_sha256: "f".repeat(64) } }, "producao", true)?.acoes.pode_solicitar_correcao).toBe(false);
+    const semBriefing = sanitizeTrabalho({ ...devolvido, correcao_disponivel: false }, "producao", true);
+    expect(semBriefing?.acoes.pode_solicitar_correcao).toBe(false);
+    expect(semBriefing?.acoes.bloqueios_producao.join(" ")).toMatch(/briefing/);
+    const reservado = sanitizeTrabalho({ ...devolvido, reserva: { etapa: "redator", em: "w", execucao_id: "9" } }, "producao", true);
+    expect(reservado?.acoes).toMatchObject({ pode_solicitar_correcao: false, em_producao: true, pode_editar: false });
+    expect(reservado?.reserva).toEqual({ etapa: "redator", em: "w", execucao_id: "9" });
+  });
+
+  it("retomar produção respeita a etapa pendente e o limite de chamadas do ciclo", () => {
+    const parado = { ...bruto, estado: "aguardando_revisao", proxima_etapa: "revisor", chamadas_api_reservadas: 5, max_api_ciclo: 7 };
+    expect(sanitizeTrabalho(parado, "producao", true)?.acoes.pode_retomar_producao).toBe(true);
+    const semCota = sanitizeTrabalho({ ...parado, chamadas_api_reservadas: 6 }, "producao", true);
+    expect(semCota?.acoes.pode_retomar_producao).toBe(false);
+    expect(semCota?.acoes.bloqueios_producao.join(" ")).toMatch(/Limite de chamadas/);
+    expect(sanitizeTrabalho({ ...bruto, estado: "aguardando_editor" }, "producao", true)?.acoes.pode_retomar_producao).toBe(false);
+  });
+
+  it("complementos de título só vêm da leitura sem trava", () => {
+    expect(resumoDeLeitura({ ...bruto, leitura_sem_trava: true, titulo_pauta: "Pauta", modo_execucao: "simulado" })).toMatchObject({ titulo_pauta: "Pauta", modo_execucao: "simulado" });
+    expect(resumoDeLeitura(bruto)).toBeUndefined();
   });
 });

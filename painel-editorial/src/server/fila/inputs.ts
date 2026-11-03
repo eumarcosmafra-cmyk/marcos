@@ -47,7 +47,31 @@ export const decisaoSchema = z
     }
   });
 
+const autorizoChamadas = z.literal(true, {
+  errorMap: () => ({ message: "Marque a autorização explícita das chamadas de API antes de iniciar a etapa." }),
+});
+
+/** Correção a partir da devolução vigente: a fila consome os motivos já registrados. */
+export const correcaoSchema = z
+  .object({
+    op_uuid: opUuid,
+    revisao_esperada: z.number().int().min(1),
+    artigo_sha256: hex64,
+    autorizo_chamadas_pagas: autorizoChamadas,
+  })
+  .strict();
+
+/** Disparo do produtor para a etapa pendente (sem op_id: o produtor gera os seus por execução). */
+export const producaoSchema = z
+  .object({
+    revisao_esperada: z.number().int().min(1),
+    autorizo_chamadas_pagas: autorizoChamadas,
+  })
+  .strict();
+
 export type EdicaoBody = z.infer<typeof edicaoSchema>;
+export type CorrecaoBody = z.infer<typeof correcaoSchema>;
+export type ProducaoBody = z.infer<typeof producaoSchema>;
 export type DecisaoBody = z.infer<typeof decisaoSchema>;
 
 export function parseBody<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, body: unknown): T {
@@ -100,4 +124,30 @@ export function buildDecisao(user: SessionUser, ambiente: Ambiente, jobKey: stri
     entrada.justificativa_pendencias = body.justificativa_pendencias;
   }
   return entrada;
+}
+
+export function buildCorrecao(user: SessionUser, ambiente: Ambiente, jobKey: string, body: CorrecaoBody): Record<string, unknown> {
+  assertJobKey(jobKey);
+  return {
+    cliente_id: user.cliente_id,
+    ambiente,
+    job_key: jobKey,
+    op_id: opId(user, body.op_uuid),
+    revisao_esperada: body.revisao_esperada,
+    artigo_sha256: body.artigo_sha256,
+    autorizar_cobranca: true,
+    ator_id: user.ator_id,
+  };
+}
+
+export function buildProducao(user: SessionUser, ambiente: Ambiente, jobKey: string, revisaoEsperada: number): Record<string, unknown> {
+  assertJobKey(jobKey);
+  return {
+    cliente_id: user.cliente_id,
+    ambiente,
+    job_key: jobKey,
+    revisao_esperada: revisaoEsperada,
+    autorizar_cobranca: true,
+    ator_id: user.ator_id,
+  };
 }

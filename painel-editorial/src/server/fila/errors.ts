@@ -25,6 +25,10 @@ const MAPA: Record<string, { code: string; status: number; mensagem: string }> =
   cadastro_ausente_ou_ambiguo: { code: "CADASTRO_CLIENTE", status: 502, mensagem: "O cadastro do cliente na fila está ausente ou ambíguo." },
   operacao_nao_permitida: { code: "OPERACAO_NAO_PERMITIDA", status: 400, mensagem: "Operação não liberada pelo adaptador." },
   campo_nao_permitido: { code: "PEDIDO_RECUSADO", status: 400, mensagem: "O adaptador recusou campos do pedido." },
+  devolucao_ja_consumida_ou_de_outra_versao: { code: "CORRECAO_INDISPONIVEL", status: 409, mensagem: "Esta devolução já foi usada em uma correção ou não se refere à versão atual. Recarregue." },
+  cobranca_nao_autorizada: { code: "COBRANCA_NAO_AUTORIZADA", status: 422, mensagem: "A etapa exige autorização explícita das chamadas de API." },
+  briefing_para_correcao_ausente: { code: "CORRECAO_SEM_BRIEFING", status: 422, mensagem: "O registro não tem o briefing do Pesquisador; a correção automática não é possível." },
+  limite_de_chamadas: { code: "LIMITE_DE_CHAMADAS", status: 422, mensagem: "O limite de chamadas de API deste ciclo foi atingido; a fila não inicia nova etapa." },
 };
 
 export function mapQueueError(codigo: string, mensagem: string): PainelError {

@@ -1,5 +1,13 @@
-export const CODIGO: { validar: string; leitura: string; encaminhar: string; respostaFila: string; erroFila: string };
-export const IDS: { workflowFila: string; tabelaFila: string; webhookId: string; path: string; credencialNome: string };
+export const CODIGO: {
+  validar: string;
+  leitura: string;
+  encaminhar: string;
+  respostaFila: string;
+  erroFila: string;
+  encaminharProdutor: string;
+  respostaProdutor: string;
+};
+export const IDS: { workflowFila: string; workflowProdutor: string; tabelaFila: string; webhookId: string; path: string; credencialNome: string };
 export interface WorkflowNode {
   id: string;
   name: string;

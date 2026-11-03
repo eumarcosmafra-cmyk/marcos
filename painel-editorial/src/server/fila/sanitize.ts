@@ -4,9 +4,12 @@
  * Tudo que não está listado aqui é descartado.
  */
 import {
+  CHAMADAS_POR_ETAPA,
   ESTADOS_APROVAVEIS,
   ESTADOS_DEVOLVIVEIS,
+  PROXIMA_ETAPA,
   type AcoesDTO,
+  type ChamadasDTO,
   type Ambiente,
   type ControleDTO,
   type DecisaoDTO,
@@ -132,6 +135,35 @@ export function sanitizeResumo(raw: unknown, ambiente: Ambiente, extra?: ResumoL
   };
 }
 
+const NOME_ETAPA: Record<string, string> = { pesquisador: "Pesquisador", redator: "Redator", revisor: "Revisor" };
+
+function acoesDeProducao(t: Omit<TrabalhoDTO, "acoes">, podeDecidir: boolean) {
+  const bloqueios: string[] = [];
+  const d = t.decisao_atual;
+  const devolucaoVigente = t.estado === "devolvido" && d?.decisao === "devolver" && d.artigo_sha256 === t.artigo_sha256 && d.versao_artigo === t.versao_artigo;
+  let podeCorrigir = podeDecidir && !t.reserva && devolucaoVigente;
+  if (devolucaoVigente && !t.correcao_disponivel) {
+    podeCorrigir = false;
+    bloqueios.push("Este registro não tem o briefing do Pesquisador; a fila não aceita correção automática. Edite o texto manualmente.");
+  }
+  const etapa = PROXIMA_ETAPA[t.estado];
+  let podeRetomar = podeDecidir && !t.reserva && Boolean(etapa);
+  if (etapa && t.chamadas.limite_do_ciclo !== null) {
+    const restantes = t.chamadas.limite_do_ciclo - t.chamadas.reservadas;
+    if (restantes < CHAMADAS_POR_ETAPA[etapa]) {
+      podeRetomar = false;
+      bloqueios.push(
+        `Limite de chamadas deste ciclo atingido (${t.chamadas.reservadas} de ${t.chamadas.limite_do_ciclo}); a fila recusa a etapa ${NOME_ETAPA[etapa]}.`,
+      );
+    }
+  }
+  if (t.estado === "bloqueado_integridade") {
+    bloqueios.push("O resultado de um agente não passou na conferência da fila (motivo nas Pendências). A saída prevista é editar o texto e salvar uma nova versão.");
+  }
+  if (t.estado === "resultado_incerto") bloqueios.push("Uma etapa terminou com resultado incerto: confira a execução antes de autorizar qualquer nova chamada (a fila não repete sozinha).");
+  return { podeCorrigir, podeRetomar, bloqueios };
+}
+
 export function computeAcoes(t: Omit<TrabalhoDTO, "acoes">, podeDecidir: boolean): AcoesDTO {
   const bloqueios: string[] = [];
   const atual = t.versoes.find((v) => v.numero === t.versao_artigo);
@@ -146,19 +178,41 @@ export function computeAcoes(t: Omit<TrabalhoDTO, "acoes">, podeDecidir: boolean
   if (base && completa && !ESTADOS_APROVAVEIS.includes(t.estado)) {
     bloqueios.push(`O estado “${t.estado}” não aceita aprovação editorial pelo contrato da fila.`);
   }
+  const producao = acoesDeProducao(t, podeDecidir);
   return {
     pode_editar: base,
     pode_aprovar: podeAprovar,
     pode_devolver: podeDevolver,
     exige_avaliacao_pendencias: t.estado === "pendente_ajustes" || t.pendencias.length > 0,
+    pode_solicitar_correcao: producao.podeCorrigir,
+    pode_retomar_producao: producao.podeRetomar,
+    em_producao: Boolean(t.reserva),
     bloqueios,
+    bloqueios_producao: producao.bloqueios,
   };
+}
+
+function sanitizeChamadas(raw: Rec): ChamadasDTO {
+  const limite = raw.max_api_ciclo;
+  return {
+    reservadas: num(raw.chamadas_api_reservadas),
+    com_uso_confirmado: num(raw.chamadas_api_com_uso_confirmado),
+    limite_do_ciclo: typeof limite === "number" && Number.isSafeInteger(limite) ? limite : null,
+  };
+}
+
+/** Complementos que só a leitura sem trava (`ler_trabalho`) traz. */
+export function resumoDeLeitura(raw: unknown): ResumoLeitura | undefined {
+  if (!isRec(raw) || typeof raw.job_key !== "string" || raw.leitura_sem_trava !== true) return undefined;
+  return sanitizeResumos({ resumos: [raw] }).get(raw.job_key);
 }
 
 export function sanitizeTrabalho(raw: unknown, ambiente: Ambiente, podeDecidir: boolean, extra?: ResumoLeitura): TrabalhoDTO | null {
   const resumo = sanitizeResumo(raw, ambiente, extra);
   if (!resumo || !isRec(raw)) return null;
-  const reserva = isRec(raw.reserva) ? { etapa: str(raw.reserva.etapa, 60) ?? "", em: str(raw.reserva.em, 40) ?? "" } : null;
+  const reserva = isRec(raw.reserva)
+    ? { etapa: str(raw.reserva.etapa, 60) ?? "", em: str(raw.reserva.em, 40) ?? "", execucao_id: str(raw.reserva.execucao_id, 40) }
+    : null;
   const base: Omit<TrabalhoDTO, "acoes"> = {
     ...resumo,
     titulo_artigo: resumo.titulo_artigo ?? tituloH1(str(raw.artigo_markdown, 800000)),
@@ -169,6 +223,8 @@ export function sanitizeTrabalho(raw: unknown, ambiente: Ambiente, podeDecidir: 
     pendencias_sha256: str(raw.pendencias_sha256, 64) ?? "",
     reserva,
     proxima_etapa: str(raw.proxima_etapa, 40),
+    chamadas: sanitizeChamadas(raw),
+    correcao_disponivel: bool(raw.correcao_disponivel),
   };
   return { ...base, acoes: computeAcoes(base, podeDecidir) };
 }

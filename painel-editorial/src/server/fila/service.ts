@@ -4,8 +4,18 @@ import type { Ambiente, TrabalhoDTO, TrabalhoResumoDTO, VersaoTextoDTO } from "@
 import { podeDecidir, type SessionUser } from "../auth/session";
 import { PainelError } from "../painel-error";
 import { callAdapter, type AdapterEnvelope, type AdapterOperation } from "../n8n/adapter-client";
-import { buildDecisao, buildEdicao, type DecisaoBody, type EdicaoBody } from "./inputs";
-import { isRec, sanitizeResumo, sanitizeResumos, sanitizeTrabalho, type ResumoLeitura } from "./sanitize";
+import { CHAMADAS_POR_ETAPA, PROXIMA_ETAPA } from "@/lib/fila-types";
+import {
+  buildCorrecao,
+  buildDecisao,
+  buildEdicao,
+  buildProducao,
+  type CorrecaoBody,
+  type DecisaoBody,
+  type EdicaoBody,
+  type ProducaoBody,
+} from "./inputs";
+import { isRec, resumoDeLeitura, sanitizeResumo, sanitizeResumos, sanitizeTrabalho, type ResumoLeitura } from "./sanitize";
 import { mapQueueError } from "./errors";
 
 type Op = AdapterOperation;
@@ -66,11 +76,16 @@ export async function listarFila(user: SessionUser, ambiente: Ambiente): Promise
   return { trabalhos, titulos_disponiveis: extras.size > 0 };
 }
 
+/**
+ * Lê um trabalho pela leitura sem trava do adaptador (mesmo recibo de `consultar`).
+ * `consultar` com job_key ocupa a trava global da fila, a mesma que o produtor usa
+ * para gravar o resultado de cada agente; ler por ela durante uma etapa paga
+ * arriscaria a gravação desse resultado.
+ */
 export async function obterTrabalho(user: SessionUser, ambiente: Ambiente, jobKey: string): Promise<TrabalhoDTO> {
   assertAmbiente(user, ambiente);
-  const r = await chamar("consultar", { cliente_id: user.cliente_id, ambiente, job_key: jobKey }, 3);
-  const extra = (await resumos(user, ambiente)).get(jobKey);
-  const t = sanitizeTrabalho(r, ambiente, podeDecidir(user), extra);
+  const r = await chamar("ler_trabalho", { cliente_id: user.cliente_id, ambiente, job_key: jobKey }, 1);
+  const t = sanitizeTrabalho(r, ambiente, podeDecidir(user), resumoDeLeitura(r));
   if (!t || t.job_key !== jobKey) throw new PainelError("FILA_RESPOSTA_INVALIDA", "A fila respondeu com outro trabalho ou formato inesperado.", 502);
   return t;
 }
@@ -118,4 +133,56 @@ export async function decidir(user: SessionUser, ambiente: Ambiente, jobKey: str
   assertAmbiente(user, ambiente);
   const entrada = buildDecisao(user, ambiente, jobKey, body);
   return resumoMutacao(await chamar("decidir", entrada, 3));
+}
+
+export interface ResultadoProducao {
+  /** Presente quando a ação começou por `preparar_correcao`. */
+  correcao: ResultadoMutacao | null;
+  /** O adaptador confirmou o disparo do produtor (as etapas rodam em segundo plano). */
+  producao_iniciada: boolean;
+  erro_producao: { codigo: string; mensagem: string } | null;
+}
+
+async function dispararProdutor(user: SessionUser, ambiente: Ambiente, jobKey: string, revisao: number): Promise<void> {
+  // Uma tentativa só: o disparo não passa pela trava, e repetir às cegas poderia iniciar duas execuções
+  // (a fila recusaria a segunda, mas o painel não saberia qual valeu).
+  const r = await chamar("retomar_producao", buildProducao(user, ambiente, jobKey, revisao), 1);
+  if (!isRec(r) || r.producao_iniciada !== true) throw new PainelError("N8N_RESPOSTA_INVALIDA", "O adaptador não confirmou o disparo do produtor.", 502);
+}
+
+function erroDeDisparo(e: unknown): { codigo: string; mensagem: string } {
+  if (e instanceof PainelError) return { codigo: e.code, mensagem: e.message };
+  return { codigo: "ERRO_INESPERADO", mensagem: "Falha inesperada ao iniciar o produtor." };
+}
+
+/** Devolução vigente → `preparar_correcao` (até 3 chamadas novas) → dispara o produtor (Redator, depois Revisor). */
+export async function solicitarCorrecao(user: SessionUser, ambiente: Ambiente, jobKey: string, body: CorrecaoBody): Promise<ResultadoProducao> {
+  assertAmbiente(user, ambiente);
+  const correcao = resumoMutacao(await chamar("preparar_correcao", buildCorrecao(user, ambiente, jobKey, body), 3));
+  try {
+    await dispararProdutor(user, ambiente, jobKey, correcao.revisao);
+    return { correcao, producao_iniciada: true, erro_producao: null };
+  } catch (e) {
+    console.error("[fila] Correção autorizada, mas o produtor não iniciou:", e instanceof PainelError ? e.code : e);
+    return { correcao, producao_iniciada: false, erro_producao: erroDeDisparo(e) };
+  }
+}
+
+/**
+ * Dispara o produtor para a etapa pendente. Antes, confere pelo registro (sem trava) que nada mudou:
+ * o produtor roda em segundo plano e uma recusa dele não voltaria ao painel.
+ */
+export async function retomarProducao(user: SessionUser, ambiente: Ambiente, jobKey: string, body: ProducaoBody): Promise<ResultadoProducao> {
+  const t = await obterTrabalho(user, ambiente, jobKey);
+  if (t.revisao !== body.revisao_esperada) {
+    throw new PainelError("VERSAO_DESATUALIZADA", "O trabalho mudou desde que foi aberto. Recarregue antes de iniciar a etapa.", 409);
+  }
+  if (t.reserva) throw new PainelError("ETAPA_JA_RESERVADA", `A etapa ${t.reserva.etapa} já está reservada; não repita a chamada.`, 409);
+  const etapa = PROXIMA_ETAPA[t.estado];
+  if (!etapa) throw new PainelError("SEM_ETAPA_PENDENTE", `O estado “${t.estado}” não tem etapa automática pendente.`, 422);
+  if (t.chamadas.limite_do_ciclo !== null && t.chamadas.limite_do_ciclo - t.chamadas.reservadas < CHAMADAS_POR_ETAPA[etapa]) {
+    throw new PainelError("LIMITE_DE_CHAMADAS", "O limite de chamadas de API deste ciclo foi atingido; a fila não inicia nova etapa.", 422);
+  }
+  await dispararProdutor(user, ambiente, jobKey, t.revisao);
+  return { correcao: null, producao_iniciada: true, erro_producao: null };
 }

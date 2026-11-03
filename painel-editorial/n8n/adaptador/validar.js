@@ -2,6 +2,8 @@
 // Recebe o corpo do Webhook { operacao, entrada } já autenticado por cabeçalho e
 // decide a rota. Só passam as operações e os campos que o painel precisa.
 // Cliente, editor e workflow de destino são fixos aqui: o chamador não escolhe.
+// Rotas: 'recusa' | 'leitura' (lista de resumos) | 'leitura_trabalho' (um trabalho,
+// sem trava) | 'fila' (subworkflow 8zHU) | 'producao' (produtor Kk56, sem aguardar).
 const CLIENTES_PERMITIDOS = ['altovaletopteam_com_br'];
 const EDITORES_PERMITIDOS = ['marcos_mafra'];
 const AMBIENTES = ['producao', 'teste'];
@@ -9,6 +11,9 @@ const CAMPOS = {
   consultar: ['cliente_id', 'ambiente', 'job_key', 'cursor'],
   salvar_edicao: ['cliente_id', 'ambiente', 'job_key', 'op_id', 'revisao_esperada', 'artigo_sha256', 'markdown', 'ator_id'],
   decidir: ['cliente_id', 'ambiente', 'job_key', 'op_id', 'revisao_esperada', 'artigo_sha256', 'decisao', 'motivos', 'confirmo_revisao_editorial', 'pendencias_sha256', 'justificativa_pendencias', 'ator_id'],
+  preparar_correcao: ['cliente_id', 'ambiente', 'job_key', 'op_id', 'revisao_esperada', 'artigo_sha256', 'autorizar_cobranca', 'ator_id'],
+  retomar_producao: ['cliente_id', 'ambiente', 'job_key', 'revisao_esperada', 'autorizar_cobranca', 'ator_id'],
+  ler_trabalho: ['cliente_id', 'ambiente', 'job_key'],
   ler_versao: ['cliente_id', 'ambiente', 'job_key', 'numero'],
   ler_resumos: ['cliente_id', 'ambiente'],
 };
@@ -16,11 +21,14 @@ const OBRIGATORIOS = {
   consultar: ['cliente_id', 'ambiente'],
   salvar_edicao: ['cliente_id', 'ambiente', 'job_key', 'op_id', 'revisao_esperada', 'artigo_sha256', 'markdown', 'ator_id'],
   decidir: ['cliente_id', 'ambiente', 'job_key', 'op_id', 'revisao_esperada', 'artigo_sha256', 'decisao', 'confirmo_revisao_editorial', 'ator_id'],
+  preparar_correcao: ['cliente_id', 'ambiente', 'job_key', 'op_id', 'revisao_esperada', 'artigo_sha256', 'autorizar_cobranca', 'ator_id'],
+  retomar_producao: ['cliente_id', 'ambiente', 'job_key', 'revisao_esperada', 'autorizar_cobranca', 'ator_id'],
+  ler_trabalho: ['cliente_id', 'ambiente', 'job_key'],
   ler_versao: ['cliente_id', 'ambiente', 'job_key', 'numero'],
   ler_resumos: ['cliente_id', 'ambiente'],
 };
-const MUTACOES = ['salvar_edicao', 'decidir'];
-const LEITURAS_RESTRITAS = ['ler_versao', 'ler_resumos'];
+const MUTACOES = ['salvar_edicao', 'decidir', 'preparar_correcao'];
+const ROTA = { ler_resumos: 'leitura', ler_trabalho: 'leitura_trabalho', ler_versao: 'leitura_trabalho', retomar_producao: 'producao' };
 
 function recusa(codigo, mensagem) {
   return [{ json: { rota: 'recusa', http_status: 400, resposta: { ok: false, erro: { codigo, mensagem } } } }];
@@ -57,6 +65,14 @@ if (MUTACOES.includes(operacao)) {
   if (!inteiroPositivo(e.revisao_esperada)) return recusa('revisao_invalida', 'revisao_esperada inválida.');
   if (!hex64(e.artigo_sha256)) return recusa('hash_invalido', 'artigo_sha256 inválido.');
 }
+if (operacao === 'preparar_correcao' || operacao === 'retomar_producao') {
+  // Etapas de agente podem gerar cobrança: só seguem com autorização explícita do editor.
+  if (e.autorizar_cobranca !== true) return recusa('cobranca_nao_autorizada', 'Autorização explícita de chamadas pagas ausente.');
+}
+if (operacao === 'retomar_producao') {
+  if (!EDITORES_PERMITIDOS.includes(e.ator_id)) return recusa('editor_nao_autorizado', 'Ator não autorizado a iniciar etapas.');
+  if (!inteiroPositivo(e.revisao_esperada)) return recusa('revisao_invalida', 'revisao_esperada inválida.');
+}
 if (operacao === 'salvar_edicao') {
   if (typeof e.markdown !== 'string' || e.markdown.length < 200 || e.markdown.length > 800000) return recusa('markdown_invalido', 'O artigo precisa ter entre 200 e 800000 caracteres.');
 }
@@ -75,4 +91,4 @@ if (operacao === 'decidir') {
 
 const pedido = { operacao };
 for (const k of CAMPOS[operacao]) if (e[k] !== undefined) pedido[k] = e[k];
-return [{ json: { rota: LEITURAS_RESTRITAS.includes(operacao) ? 'leitura' : 'fila', operacao, pedido } }];
+return [{ json: { rota: ROTA[operacao] || 'fila', operacao, pedido } }];

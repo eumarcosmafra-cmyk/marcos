@@ -38,7 +38,10 @@ Validação do painel real no navegador (Playwright; mutações só em registros
 
 ```bash
 BASE_URL=http://127.0.0.1:3100 SENHA_MARCOS_ARQ=... SENHA_LEITOR_ARQ=... FASE=principal node scripts/validar-painel-real.cjs
+BASE_URL=http://127.0.0.1:3100 SENHA_MARCOS_ARQ=... JOB_TESTE=<job teste simulado> node scripts/validar-producao.cjs
 ```
+
+`validar-producao.cjs` recusa agir se o registro não for do ambiente teste com execução simulada. Em produção (`JOB_PROD_DIALOGO`), só abre o diálogo de autorização e cancela.
 
 Jornada do protótipo demonstrativo (com `PAINEL_DEMO=1`):
 
@@ -51,6 +54,7 @@ node scripts/jornada-e2e.cjs ./capturas
 - **Fila** (`/fila`): trabalhos do cliente com filtro **Produção / Teste**, busca, estado, versão, pendências e situação da aprovação.
 - **Trabalho** (`/fila/<job_key>?ambiente=...`): título, pauta, palavra-chave, estado, **versão do artigo** e **revisão do registro**; cartões separados para aprovação editorial, revisão do professor e publicação; abas Artigo (leitura/edição/lado a lado, copiar, baixar), Pendências do Revisor e Histórico e versões (com comparação entre versões).
 - **Ações** (só `editor_responsavel`): salvar edição (cria nova versão e invalida aprovação anterior), devolver com motivos, aprovar editorialmente. Com pendências, a aprovação exige marcar cada pendência como avaliada e escrever a justificativa — nada é preenchido automaticamente.
+- **Solicitar correção** (depois de uma devolução) e **Retomar produção** (etapa automática parada): disparam os agentes pelo produtor do n8n só depois de uma autorização explícita das chamadas pagas. O diálogo mostra o limite de chamadas e o uso já registrado. A tela acompanha as etapas relendo o registro sem ocupar a trava da fila.
 - Cada mutação leva `revisao_esperada`, `artigo_sha256` e um `op_id` estável (reaproveitado só quando a tentativa anterior idêntica teve resultado incerto). Versão antiga é recusada (`VERSAO_DESATUALIZADA`).
 - Falhas mostram o código (`N8N_INDISPONIVEL`, `FILA_OCUPADA`, `VERSAO_DESATUALIZADA`...) e o botão **Tentar novamente**.
 
