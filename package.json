@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "audit:catalogo": "tsx scripts/catalog-audit/run.ts",
+    "audit:classificar": "tsx scripts/catalog-audit/classify.ts",
     "audit:catalogo:test": "tsx scripts/catalog-audit/selftest.ts",
     "audit:catalogo:typecheck": "tsc -p scripts/catalog-audit/tsconfig.json"
   },

@@ -69,6 +69,26 @@ CSV com `;` e BOM UTF-8 (abre direto no Excel pt-BR).
 - Listas de termos são heurísticas; a classificação final das categorias é do negócio.
 - A API Magazord (`GET /api/v2/site/produto`, campo `categorias`, em que o primeiro item é a principal) é o passo seguinte para cobrir 100% do catálogo com o ID exato de cada vínculo.
 
+## Classificação do catálogo pelo slug (sem API)
+
+Classifica todos os produtos do sitemap pelo slug da URL: tipo de peça, sistema, marca, modelo e anos.
+
+```bash
+npm run audit:classificar -- --site https://www.loja.com.br
+```
+
+Para reprocessar sem baixar de novo, use `--arquivo output/catalog-audit/<host>-classificacao/urls-produto.txt`.
+
+| Arquivo | Conteúdo |
+|---|---|
+| `resumo-classificacao.md` | Cobertura, produtos por marca e sistema, corte por volume (quantos nós Marca > Modelo > Sistema sobrevivem com N produtos) |
+| `classificacao-produtos.csv` | Uma linha por produto |
+| `matriz-marca-modelo-sistema.csv` | Contagem de produtos por nó |
+| `modelos.csv` | Modelos agrupados, com coluna para preencher o nome canônico |
+| `tipos-por-sistema.csv` | Tipos de peça e o sistema atribuído (para revisar as regras de `taxonomy.ts`) |
+
+Como funciona: a marca é procurada no slug. O que vem antes dela é o tipo de peça; o que vem depois é modelo e anos. Slugs sem marca são resolvidos por um dicionário modelo→marca aprendido dos slugs que têm as duas (ordem das palavras não importa) e, em último caso, pela família do modelo (ex.: "multistrada" → Ducati). O sistema sai de regras por palavra-chave em ordem de prioridade (`SISTEMAS` em `taxonomy.ts`), em que o qualificador decide o termo genérico ("suporte farol" → Iluminação).
+
 ## Ambiente com proxy
 
 Em ambientes onde o `fetch` do Node precisa de proxy (Node ≥ 22.21): `NODE_USE_ENV_PROXY=1 npm run audit:catalogo -- ...`

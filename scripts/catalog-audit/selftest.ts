@@ -8,6 +8,7 @@ import { extrairCategoria, extrairProduto, fatiarJson } from "./extract"
 import { Robots } from "./robots"
 import { avaliarCategoria, avaliarProduto, chaveUrl, marcarDuplicados, niveisDeCategoria, type Contexto } from "./rules"
 import { amostrar } from "./sitemap"
+import { DicionarioModelos, classificarComMarca, classificarSemMarca, classificarSistema, detectarMarca, extrairModeloEAnos, tokenizar } from "./taxonomy"
 
 const DIR = resolve(process.cwd(), "scripts/catalog-audit/fixtures")
 const ler = (f: string) => readFileSync(resolve(DIR, f), "utf-8")
@@ -121,6 +122,49 @@ caso("amostra espalhada e determinística", () => {
   const itens = Array.from({ length: 100 }, (_, i) => i)
   assert.deepEqual(amostrar(itens, 4), [12, 37, 62, 87])
   assert.equal(amostrar(itens, 500).length, 100)
+})
+
+caso("slug com marca: tipo, sistema, modelo, anos, código", () => {
+  const t = tokenizar("pinca-freio-dianteiro-honda-cbr-1000-rr-2008-2011-usado-original-00512345")
+  const m = detectarMarca(t)
+  assert.ok(m)
+  const c = classificarComMarca("u", t, m)
+  assert.deepEqual([c.tipoPeca, c.sistema, c.marca, c.modelo, c.anos, c.codigo], ["pinca freio dianteiro", "Freios", "honda", "cbr 1000 rr", "2008-2011", "00512345"])
+})
+
+caso("modelo: repetição, apelido colado, anos de 2 dígitos, truncado e 'c/ avaria'", () => {
+  assert.deepEqual(extrairModeloEAnos(tokenizar("gsxr-750-srad-srad-750-11-13")), { modelo: ["gsxr", "750", "srad"], anos: "2011-2013", codigo: null })
+  assert.deepEqual(extrairModeloEAnos(tokenizar("cb-650-f-cb650f-14-16")).modelo, ["cb", "650", "f"])
+  assert.deepEqual(extrairModeloEAnos(tokenizar("multistrada-1200s-1200-s-10-14")).modelo, ["multistrada", "1200s"])
+  assert.deepEqual(extrairModeloEAnos(tokenizar("r-1200-gs-r1200gs-13-1")), { modelo: ["r", "1200", "gs"], anos: "2013", codigo: null })
+  assert.deepEqual(extrairModeloEAnos(tokenizar("r-1200-gs-r1200gs-13-16c-avaria")), { modelo: ["r", "1200", "gs"], anos: "2013-2016", codigo: null })
+  assert.deepEqual(extrairModeloEAnos(tokenizar("mt-07-2018-2020")), { modelo: ["mt", "07"], anos: "2018-2020", codigo: null })
+  assert.deepEqual(extrairModeloEAnos(tokenizar("ninja-300-14")), { modelo: ["ninja", "300"], anos: "2014", codigo: null })
+})
+
+caso("slug sem marca: infere pelo modelo, em qualquer ordem de palavras", () => {
+  const d = new DicionarioModelos()
+  for (let i = 0; i < 5; i++) d.registrar("yzf r1", "yamaha")
+  for (let i = 0; i < 5; i++) d.registrar("f 800 gs", "bmw")
+  const dic = d.consolidar(5)
+  const a = classificarSemMarca("u", tokenizar("pinca-freio-dianteiro-f-800-gs-2009-2012-original-00515988"), dic)
+  assert.deepEqual([a.tipoPeca, a.sistema, a.marca, a.modelo, a.anos, a.codigo, a.fonteMarca], ["pinca freio dianteiro", "Freios", "bmw", "f 800 gs", "2009-2012", "00515988", "modelo"])
+  const b = classificarSemMarca("u", tokenizar("bico-injetor-r1-yzf-09-14"), dic)
+  assert.deepEqual([b.marca, b.modelo, b.anos], ["yamaha", "yzf r1", "2009-2014"])
+  const f = classificarSemMarca("u", tokenizar("sensor-oleo-multistrada-v4-rally-2024-2024-original"), dic, new Map([["multistrada", "ducati"]]))
+  assert.deepEqual([f.tipoPeca, f.marca, f.modelo, f.anos, f.fonteMarca], ["sensor oleo", "ducati", "multistrada v4 rally", "2024", "familia"])
+  const c = classificarSemMarca("u", tokenizar("pneu-dianteiro-120-70-17-maxxis"), dic)
+  assert.deepEqual([c.marca, c.sistema], [null, "Rodas e Pneus"])
+})
+
+caso("sistema: qualificador decide o termo genérico", () => {
+  assert.equal(classificarSistema("suporte farol"), "Iluminação")
+  assert.equal(classificarSistema("tampa pinhao"), "Transmissão e Embreagem")
+  assert.equal(classificarSistema("sensor map"), "Alimentação e Injeção")
+  assert.equal(classificarSistema("kit parafuso carenagem"), "Carenagem e Acabamentos")
+  assert.equal(classificarSistema("parafuso"), "Parafusos e Fixação")
+  assert.equal(classificarSistema("disco embreagem"), "Transmissão e Embreagem")
+  assert.equal(classificarSistema("xpto"), "Não classificado")
 })
 
 if (falhas) {
