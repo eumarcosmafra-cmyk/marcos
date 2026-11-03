@@ -178,7 +178,10 @@ export function montarWorkflow(credencialId = "__CREDENCIAL_ID__") {
       saveExecutionProgress: false,
       saveDataSuccessExecution: "none",
       saveDataErrorExecution: "all",
-      executionTimeout: 120,
+      // O n8n limita uma subexecução ao menor entre o timeout dela e o de quem a disparou,
+      // mesmo sem aguardar. Com 120 s, o produtor (até 1800 s) seria cortado no meio de uma
+      // etapa paga. O painel tem seu próprio limite de espera (N8N_ADAPTADOR_TIMEOUT_MS).
+      executionTimeout: 1900,
       timezone: "America/Sao_Paulo",
       callerPolicy: "none",
     },

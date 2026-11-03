@@ -245,5 +245,7 @@ describe("adaptador — respostas e estrutura do workflow", () => {
       for (const saida of c.main) for (const destino of saida) expect(wf.nodes.some((n) => n.name === destino.node)).toBe(true);
     }
     expect(wf.settings.saveDataSuccessExecution).toBe("none");
+    // Não pode cortar o produtor (executionTimeout 1800 s) disparado por este workflow.
+    expect(wf.settings.executionTimeout as number).toBeGreaterThan(1800);
   });
 });

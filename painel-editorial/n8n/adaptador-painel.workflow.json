@@ -635,7 +635,7 @@
     "saveExecutionProgress": false,
     "saveDataSuccessExecution": "none",
     "saveDataErrorExecution": "all",
-    "executionTimeout": 120,
+    "executionTimeout": 1900,
     "timezone": "America/Sao_Paulo",
     "callerPolicy": "none"
   },
