@@ -121,6 +121,8 @@ export function TrabalhoView({ jobKey, ambiente }: { jobKey: string; ambiente: A
   // Encerra o acompanhamento quando o produtor termina ou deixa de avançar.
   useEffect(() => {
     if (!t || !acompanhamento) return;
+    // Leitura anterior ao disparo (ex.: ainda "devolvido"): não serve para concluir nada.
+    if (lidoEm < acompanhamento.desde) return;
     if (t.revisao !== acompanhamento.revisao) {
       setAcompanhamento({ revisao: t.revisao, desde: lidoEm });
       return;
