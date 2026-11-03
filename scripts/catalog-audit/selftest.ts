@@ -77,6 +77,23 @@ caso("categoria: ItemList, paginação, nome genérico e H1 duplicado", () => {
   for (const esperado of ["NOME_GENERICO", "CATEGORIA_RAIZ", "H1_DUPLICADO"]) assert.ok(r.includes(esperado), `faltou ${esperado}; veio ${r.join(",")}`)
 })
 
+caso("raiz com nome de modelo em vez da marca (RAIZ_SEM_MARCA)", () => {
+  const url = `${BASE}/painel-honda-cb-500-2015-usado`
+  const d = extrairProduto(ler("produto-correto.html"), url, 200, url)
+  assert.ok(d.breadcrumbJsonLd)
+  d.breadcrumbJsonLd[1] = { nome: "BIZ 125 EX", url: `${BASE}/biz-125-ex` }
+  const r = regras(avaliarProduto(d, ctx).achados)
+  assert.deepEqual(r, ["RAIZ_SEM_MARCA"])
+})
+
+caso("condição: 'usado' só na descrição também conta", () => {
+  const html = `<html><head><title>Painel CB 500</title><script type="application/ld+json">{"@type":"Product","name":"Painel CB 500","description":"Produto usado em perfeitas condições","itemCondition":"https://schema.org/NewCondition"}</script></head></html>`
+  const url = `${BASE}/painel-cb-500`
+  const d = extrairProduto(html, url, 200, url)
+  assert.equal(d.mencionaUsado, true)
+  assert.ok(regras(avaliarProduto(d, ctx).achados).includes("CONDICAO_DIVERGENTE"))
+})
+
 caso("niveisDeCategoria não remove categoria com nome curto que prefixa o produto", () => {
   const url = `${BASE}/painel-honda`
   const niveis = niveisDeCategoria([{ nome: "Home", url: `${BASE}/` }, { nome: "Painel", url: null }], url, "Painel Honda CB 500 2015 Usado")

@@ -163,6 +163,7 @@ export function extrairProduto(html: string, url: string, status: number, urlFin
     compatMarca: compat.marca,
     compatModelo: compat.modelo,
     compatAnos: compat.anos,
+    mencionaUsado: /\busad[oa]s?\b|\bseminov[oa]s?\b/i.test(`${texto(produto?.name) ?? ""} ${limpar($("title").first().text()) ?? ""} ${url} ${descricao ?? ""}`),
     categoriaOrigem: null,
   }
 }

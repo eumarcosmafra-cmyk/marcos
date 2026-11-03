@@ -47,6 +47,8 @@ export interface DadosProduto extends DadosBase {
   compatMarca: string | null
   compatModelo: string | null
   compatAnos: string | null
+  /** Nome, título, URL ou descrição dizem que o item é usado. */
+  mencionaUsado: boolean
   /** Categoria de listagem de onde o produto foi coletado (modo --categoria). */
   categoriaOrigem: string | null
 }

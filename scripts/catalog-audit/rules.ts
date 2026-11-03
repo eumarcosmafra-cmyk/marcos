@@ -99,7 +99,7 @@ function regrasDeNiveis(niveis: BreadcrumbItem[], ctx: Contexto, saida: Achado[]
     if (promo && ehProduto) saida.push(achado("CATEGORIA_PROMOCIONAL_NO_BREADCRUMB", "ALTA", `"${n.nome}" (termo: ${promo})`))
     const generico = contemTermo(n.nome, TERMOS_NOME_GENERICO)
     if (generico) saida.push(achado("NOME_GENERICO", "MEDIA", `"${n.nome}"`))
-    if (!n.url) saida.push(achado("CATEGORIA_SEM_URL", "ALTA", `"${n.nome}" no breadcrumb sem link (categoria não pública/inativa?)`))
+    if (!n.url) saida.push(achado("CATEGORIA_SEM_URL", "ALTA", `"${n.nome}" no breadcrumb sem link (categoria não pública/inativa?). Google exige "item" em todo nível exceto o último.`))
     if (i > 0 && normalizar(niveis[i - 1].nome) === normalizar(n.nome)) saida.push(achado("NIVEL_REPETIDO", "MEDIA", `"${n.nome}" repetido em sequência`))
   })
 }
@@ -109,6 +109,10 @@ export function avaliarProduto(d: DadosProduto, ctx: Contexto): { achados: Achad
   regrasComuns(d, saida)
   const sugestao = sugerir(d, ctx)
   if (saida.some((a) => a.regra === "HTTP_ERRO")) return { achados: saida, sugestao }
+
+  if (d.mencionaUsado && d.condicaoSchema === "NewCondition") {
+    saida.push(achado("CONDICAO_DIVERGENTE", "ALTA", "Produto usado declarado como NewCondition no schema (Merchant Center/IA)"))
+  }
 
   const bc = d.breadcrumbJsonLd ?? d.breadcrumbPlataforma
   if (!d.breadcrumbJsonLd) saida.push(achado("SEM_BREADCRUMB_JSONLD", "ALTA", "Sem BreadcrumbList em JSON-LD"))
@@ -137,10 +141,12 @@ export function avaliarProduto(d: DadosProduto, ctx: Contexto): { achados: Achad
     saida.push(achado("MARCA_DIVERGENTE", "ALTA", `Produto: ${marcasProduto.join("/")}; breadcrumb: ${marcasTrilha.join("/")}`))
   }
 
-  const pareceUsado = /\busad[oa]s?\b/i.test(`${d.nomeProduto ?? ""} ${d.titulo ?? ""} ${d.url}`)
-  if (pareceUsado && d.condicaoSchema === "NewCondition") {
-    saida.push(achado("CONDICAO_DIVERGENTE", "ALTA", "Produto usado declarado como NewCondition no schema (Merchant Center/IA)"))
+  // Raiz da árvore deveria ser a marca do veículo quando há Marca > Modelo > ...
+  const marcaVeiculo = marcasEm(d.compatMarca ?? d.marcaSchema ?? "")
+  if (niveis.length >= 2 && marcaVeiculo.length && !marcasEm(niveis[0].nome).some((m) => marcaVeiculo.includes(m))) {
+    saida.push(achado("RAIZ_SEM_MARCA", "ALTA", `Raiz "${niveis[0].nome}" para produto ${marcaVeiculo.join("/").toUpperCase()}${niveis[0].id ? ` (id=${niveis[0].id})` : ""}`))
   }
+
   if (d.categoriaPrincipalId !== null && d.breadcrumbPlataforma) {
     const ids = d.breadcrumbPlataforma.map((b) => b.id).filter((x): x is number => typeof x === "number")
     if (ids.length && !ids.includes(d.categoriaPrincipalId)) {
