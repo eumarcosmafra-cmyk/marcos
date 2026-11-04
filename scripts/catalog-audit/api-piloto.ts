@@ -74,7 +74,7 @@ const compacta = (s: string) => tokenizar(s.replace(/\([^)]*\)/g, " ")).join("")
 const TRIM = /\s+(ABS|SE|DLX)$/i
 
 function main(): void {
-  const { values } = parseArgs({ options: { marca: { type: "string" }, corte: { type: "string" }, dir: { type: "string" }, export: { type: "string" } } })
+  const { values } = parseArgs({ options: { marca: { type: "string" }, corte: { type: "string" }, dir: { type: "string" }, export: { type: "string" }, fusoes: { type: "string" } } })
   if (!values.marca) throw new Error("Informe --marca (ex.: dayun)")
   const marcaAlvo = norm(values.marca)
   const corte = Number(values.corte ?? 50)
@@ -158,7 +158,7 @@ function main(): void {
     return { nome: partes[1] ?? null, idAtual: null }
   }
 
-  interface Linha { p: ProdutoMagazord; modelo: string | null; modeloIdAtual: number | null; sistema: string; acao: string; obs: string; gemeo: ProdutoMagazord | null }
+  interface Linha { p: ProdutoMagazord; modelo: string | null; modeloOriginal: string | null; modeloIdAtual: number | null; sistema: string; acao: string; obs: string; gemeo: ProdutoMagazord | null }
   const linhas: Linha[] = daMarca.map((p) => {
     const gemeo = gemeoNaArvore(p)
     const fonte = gemeo ?? p
@@ -173,7 +173,8 @@ function main(): void {
       acao = "REVISAR_SEM_MODELO"
       obs = nome ? `Modelo inválido ("${nome}")` : "Nome do produto não traz o modelo"
     } else if (p.categorias[0] !== CATEGORIA_TECNICA && caminho(p.categorias[0] ?? -1)[0]?.id === raiz?.id) acao = "AJUSTAR_PRINCIPAL"
-    return { p, modelo: acao === "REVISAR_SEM_MODELO" ? null : nome, modeloIdAtual: idAtual, sistema, acao, obs, gemeo }
+    const modelo = acao === "REVISAR_SEM_MODELO" ? null : nome
+    return { p, modelo, modeloOriginal: modelo, modeloIdAtual: idAtual, sistema, acao, obs, gemeo }
   })
 
   // Fusões (regra 1): mesma chave compacta, ou sufixo ABS/SE/DLX
@@ -193,6 +194,23 @@ function main(): void {
     for (const n of nomes) canonico.set(n, escolha)
   }
   for (const l of linhas) if (l.modelo) l.modelo = canonico.get(l.modelo) ?? l.modelo
+
+  // Fusões decididas por pessoa (ex.: nome canônico pela tabela FIPE): arquivo de;para;obs
+  const fusoesManuais = new Map<string, { para: string; obs: string }>()
+  if (values.fusoes) {
+    for (const r of lerCsv(readFileSync(values.fusoes, "utf-8"))) if (r.de && r.para) fusoesManuais.set(r.de.trim(), { para: r.para.trim(), obs: (r.obs ?? "").trim() })
+  }
+  for (const [de, f] of fusoesManuais) {
+    for (const [n, c] of canonico) if (c === de || n === de) canonico.set(n, f.para)
+    canonico.set(de, f.para)
+  }
+  for (const l of linhas) {
+    const f = l.modelo ? fusoesManuais.get(l.modelo) : undefined
+    if (f && l.modelo) {
+      if (f.obs) l.obs = [l.obs, `Modelo "${l.modelo}" fundido em "${f.para}": ${f.obs}`].filter(Boolean).join(" | ")
+      l.modelo = f.para
+    }
+  }
 
   // Sem modelo: sugere pelo lote de desmontagem (códigos vizinhos ±5 da mesma marca, todos do mesmo modelo)
   const numCodigo = (c: string) => {
@@ -266,7 +284,11 @@ function main(): void {
     const destinoNome = canonico.get(nome) ?? nome
     const n = linhas.filter((l) => l.modelo === destinoNome).length
     if (norm(nome) === marcaAlvo) mud.push(["DESATIVAR", `${nomeRaiz} > ${nome}`, null, 0, "Modelo com o nome da própria marca"])
-    else if (destinoNome !== nome) mud.push(["FUNDIR", `${nomeRaiz} > ${nome}`, `${nomeRaiz} > ${destinoNome}`, n, "Mesmo modelo: variação de grafia ou de equipamento (regra 1)"])
+    else if (destinoNome !== nome) {
+      const manual = fusoesManuais.get(nome)
+      const motivo = manual ? `Fusão confirmada (nome canônico FIPE)${manual.obs ? `: ${manual.obs}` : ""}` : "Mesmo modelo: variação de grafia ou de equipamento (regra 1)"
+      mud.push(["FUNDIR", `${nomeRaiz} > ${nome}`, `${nomeRaiz} > ${destinoNome}`, linhas.filter((l) => l.modeloOriginal === nome).length, motivo])
+    }
     else if (!usadosAtuais.has(nome)) mud.push(["DESATIVAR", `${nomeRaiz} > ${nome}`, null, 0, "Modelo sem produtos"])
     else mud.push(["MANTER", `${nomeRaiz} > ${nome}`, `${nomeRaiz} > ${nome}`, n, ""])
   }
