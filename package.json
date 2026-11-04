@@ -12,6 +12,7 @@
     "audit:classificar": "tsx scripts/catalog-audit/classify.ts",
     "audit:api": "tsx scripts/catalog-audit/api-extrair.ts",
     "audit:depara": "tsx scripts/catalog-audit/api-depara.ts",
+    "audit:taxonomia": "tsx scripts/catalog-audit/api-taxonomia.ts",
     "audit:catalogo:test": "tsx scripts/catalog-audit/selftest.ts",
     "audit:catalogo:typecheck": "tsc -p scripts/catalog-audit/tsconfig.json"
   },

@@ -75,6 +75,30 @@ export const MARCAS_VEICULO = [
   "bajaj",
   "sundown",
   "traxx",
+  // Demais montadoras com produto na loja (cadastro de marcas da Magazord). "vento" ficou de fora:
+  // é palavra comum em nome de peça e quebraria a separação tipo/modelo.
+  "zontes",
+  "agrale",
+  "dayun",
+  "dayang",
+  "fym",
+  "buell",
+  "bashan",
+  "voltz",
+  "daelim",
+  "leopard",
+  "mvk",
+  "hyosung",
+  "ashima",
+  "amazonas",
+  "loncin",
+  "motorino",
+  "lambreta",
+  "sanyang",
+  "pgo",
+  "monark",
+  "jawa",
+  "cagiva",
 ]
 
 export const NOMES_HOME = ["home", "inicio", "pagina inicial", "pagina principal"]

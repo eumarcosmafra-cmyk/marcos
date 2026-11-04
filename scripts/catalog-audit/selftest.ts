@@ -165,6 +165,7 @@ caso("sistema: qualificador decide o termo genérico", () => {
   assert.equal(classificarSistema("kit parafuso carenagem"), "Carenagem e Acabamentos")
   assert.equal(classificarSistema("parafuso"), "Parafusos e Fixação")
   assert.equal(classificarSistema("disco embreagem"), "Transmissão e Embreagem")
+  assert.equal(classificarSistema("acabamento esquerdo tanque"), "Carenagem e Acabamentos")
   assert.equal(classificarSistema("xpto"), "Não classificado")
 })
 

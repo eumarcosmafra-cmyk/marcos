@@ -189,7 +189,11 @@ export function limparTipo(tokens: string[]): string {
   return tokens.filter((t) => !RUIDO_TIPO.has(t) && !/^\d+$/.test(t)).join(" ")
 }
 
+/** Peças cujo nome começa por estas palavras são acabamento, qualquer que seja o qualificador ("acabamento tanque"). */
+const CABECA_CARENAGEM = new Set(["acabamento", "acabamentos", "carenagem", "carenagens", "adesivo", "adesivos", "emblema", "emblemas"])
+
 export function classificarSistema(tipo: string): string {
+  if (CABECA_CARENAGEM.has(tipo.split(" ")[0])) return "Carenagem e Acabamentos"
   const alvo = ` ${tipo} `
   for (const { sistema, termos } of SISTEMAS) {
     if (termos.some((t) => alvo.includes(` ${t} `))) return sistema
