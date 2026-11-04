@@ -46,7 +46,7 @@ const contem = (a: Set<string>, b: Set<string>) => Array.from(b).every((x) => a.
 function main(): void {
   const { values } = parseArgs({ options: { dir: { type: "string" }, "minimo-sistema": { type: "string" }, sitemap: { type: "string" } } })
   const dir = values.dir ?? join("output", "catalog-audit", "api")
-  const minimo = Number(values["minimo-sistema"] ?? 50)
+  const minimo = Number(values["minimo-sistema"] ?? 10)
 
   const categorias = JSON.parse(readFileSync(join(dir, "categorias.json"), "utf-8")) as CategoriaMagazord[]
   const unicos = new Map<number, ProdutoMagazord>()

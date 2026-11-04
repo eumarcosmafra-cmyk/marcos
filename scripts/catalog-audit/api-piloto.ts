@@ -77,7 +77,7 @@ function main(): void {
   const { values } = parseArgs({ options: { marca: { type: "string" }, corte: { type: "string" }, dir: { type: "string" }, export: { type: "string" }, fusoes: { type: "string" } } })
   if (!values.marca) throw new Error("Informe --marca (ex.: dayun)")
   const marcaAlvo = norm(values.marca)
-  const corte = Number(values.corte ?? 50)
+  const corte = Number(values.corte ?? 10)
   const dir = values.dir ?? join("output", "catalog-audit", "api")
   const saida = join("output", "catalog-audit", "piloto", marcaAlvo.replace(/\s+/g, "-"))
   mkdirSync(saida, { recursive: true })
@@ -268,7 +268,12 @@ function main(): void {
 
   // 1) Árvore final no formato Magazord
   const arvore: string[][] = [["Nome", "Nome Pai", "Tipo", "Ordem", "Filtro"], [nomeRaiz, "", "Produto", "", "1"]]
-  const modelosFinais = Array.from(new Set(linhas.filter((l) => l.acao !== "REVISAR_SEM_MODELO").map((l) => l.modelo).filter((x): x is string => !!x))).sort()
+  const comProdutos = new Set(linhas.filter((l) => l.acao !== "REVISAR_SEM_MODELO").map((l) => l.modelo).filter((x): x is string => !!x))
+  // Conservador: modelos que já existem na árvore continuam, mesmo sem produto hoje (exceto fundidos e o que tem o nome da marca)
+  const vaziosMantidos = modelosAtuais
+    .map((m) => m.nome.trim())
+    .filter((n) => !comProdutos.has(n) && (canonico.get(n) ?? n) === n && norm(n) !== marcaAlvo)
+  const modelosFinais = Array.from(new Set([...comProdutos, ...vaziosMantidos])).sort()
   for (const m of modelosFinais) {
     arvore.push([m, nomeRaiz, "Produto", "", "1"])
     const sistemas = Array.from(new Set(linhas.filter((l) => l.modelo === m && (volNo.get(`${m}|${l.sistema}`) ?? 0) >= corte).map((l) => l.sistema))).sort()
@@ -289,11 +294,12 @@ function main(): void {
       const motivo = manual ? `Fusão confirmada (nome canônico FIPE)${manual.obs ? `: ${manual.obs}` : ""}` : "Mesmo modelo: variação de grafia ou de equipamento (regra 1)"
       mud.push(["FUNDIR", `${nomeRaiz} > ${nome}`, `${nomeRaiz} > ${destinoNome}`, linhas.filter((l) => l.modeloOriginal === nome).length, motivo])
     }
-    else if (!usadosAtuais.has(nome)) mud.push(["DESATIVAR", `${nomeRaiz} > ${nome}`, null, 0, "Modelo sem produtos"])
+    else if (!usadosAtuais.has(nome)) mud.push(["MANTER_SEM_PRODUTOS", `${nomeRaiz} > ${nome}`, `${nomeRaiz} > ${nome}`, 0, "Sem produto hoje; mantida para novas entradas do desmanche (pode ficar oculta no menu)"])
     else mud.push(["MANTER", `${nomeRaiz} > ${nome}`, `${nomeRaiz} > ${nome}`, n, ""])
   }
   for (const m of modelosFinais) if (!modelosAtuais.some((x) => x.nome.trim() === m)) mud.push(["CRIAR", null, `${nomeRaiz} > ${m}`, linhas.filter((l) => l.modelo === m).length, "Modelo com produtos e sem categoria"])
-  for (const id of nivel3) mud.push(["DESATIVAR", nomeCaminho(id), null, null, "Grupo genérico do 3º nível substituído pela estrutura nova"])
+  const ligadosHoje = (id: number) => linhas.filter((l) => l.p.categorias.includes(id)).length
+  for (const id of nivel3) mud.push(["DESATIVAR_APOS_MIGRACAO", nomeCaminho(id), null, ligadosHoje(id), "Grupo genérico do 3º nível: desativar só depois que os produtos ligados a ele estiverem na estrutura nova (não tem URL pública)"])
   for (const r of arvore.slice(2)) if (r[1].includes(" > ")) mud.push(["CRIAR", null, `${r[1]} > ${r[0]}`, volNo.get(`${r[1].split(" > ")[1]}|${r[0]}`) ?? null, `Subcategoria de sistema (≥ ${corte} produtos)`])
   for (const [a, b] of revisarFusao) mud.push(["REVISAR_FUSAO", `${nomeRaiz} > ${b}`, `${nomeRaiz} > ${a}`, volumeModelo.get(b) ?? null, "Nome contém outro modelo: confirmar se é a mesma moto"])
   if (raiz && !caminhosExport.size) mud.push(["INFO", null, null, null, "Exportação Magazord não informada: nomes não conferidos"])
@@ -338,12 +344,13 @@ function main(): void {
   md.push("", "### Modelos finais", "", "| Modelo | Produtos | Observação |", "|---|---|---|")
   for (const m of modelosFinais) {
     const n = linhas.filter((l) => l.modelo === m).length
-    md.push(`| ${m} | ${fmt(n)} | ${n < 5 ? "Página fina (< 5 produtos): manter a categoria, avaliar noindex" : ""} |`)
+    md.push(`| ${m} | ${fmt(n)} | ${n === 0 ? "Sem produto hoje: mantida" : ""} |`)
   }
   if (revisarFusao.length) {
     md.push("", "### Possíveis fusões para confirmar", "")
     for (const [a, b] of revisarFusao) md.push(`- "${b}" é o mesmo modelo que "${a}"?`)
   }
+  md.push("", "## Duplicados", "", "Lista para análise caso a caso: `duplicados.csv` (gerar com `npm run audit:duplicados -- --marca <marca>`).", "")
   md.push("", "## Como aplicar", "", `1. Revisar \`mudancas-corte${corte}.csv\` e as fusões acima.`, `2. Enviar \`categorias-magazord-corte${corte}.csv\` à Magazord para criar/ajustar a árvore.`, `3. Aplicar \`produtos-corte${corte}.csv\`: trocar só a categoria principal; manter as atuais como secundárias.`, "4. Decidir os DUPLICADOS antes de recategorizar as cópias.", "")
   writeFileSync(join(saida, `auditoria-corte${corte}.md`), md.join("\n"))
   console.log(`[piloto] ${nomeRaiz}: ${linhas.length} produtos -> ${saida}`)
