@@ -136,6 +136,7 @@ caso("modelo: repetição, apelido colado, anos de 2 dígitos, truncado e 'c/ av
   assert.deepEqual(extrairModeloEAnos(tokenizar("gsxr-750-srad-srad-750-11-13")), { modelo: ["gsxr", "750", "srad"], anos: "2011-2013", codigo: null })
   assert.deepEqual(extrairModeloEAnos(tokenizar("cb-650-f-cb650f-14-16")).modelo, ["cb", "650", "f"])
   assert.deepEqual(extrairModeloEAnos(tokenizar("multistrada-1200s-1200-s-10-14")).modelo, ["multistrada", "1200s"])
+  assert.deepEqual(extrairModeloEAnos(tokenizar("cbr-1000-rr-cbr1000-08-11")).modelo, ["cbr", "1000", "rr"])
   assert.deepEqual(extrairModeloEAnos(tokenizar("r-1200-gs-r1200gs-13-1")), { modelo: ["r", "1200", "gs"], anos: "2013", codigo: null })
   assert.deepEqual(extrairModeloEAnos(tokenizar("r-1200-gs-r1200gs-13-16c-avaria")), { modelo: ["r", "1200", "gs"], anos: "2013-2016", codigo: null })
   assert.deepEqual(extrairModeloEAnos(tokenizar("mt-07-2018-2020")), { modelo: ["mt", "07"], anos: "2018-2020", codigo: null })

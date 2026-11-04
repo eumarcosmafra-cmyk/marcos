@@ -67,10 +67,13 @@ export const MARCAS_SLUG: MarcaSlug[] = MARCAS_VEICULO.map((m) => ({
 
 export function tokenizar(slug: string): string[] {
   let s = slug
-  try {
-    s = decodeURIComponent(slug)
-  } catch (e) {
-    console.error("[taxonomy] slug com escape inválido:", slug, e)
+  // Só decodifica quando há escape de URL ("balan%C3%A7a"); nomes com "20% OFF" ficam como estão.
+  if (/%[0-9a-f]{2}/i.test(slug)) {
+    try {
+      s = decodeURIComponent(slug)
+    } catch (e) {
+      console.error("[taxonomy] slug com escape inválido:", slug, e instanceof Error ? e.message : e)
+    }
   }
   return (
     s
@@ -154,9 +157,12 @@ export function limparModelo(tokens: string[]): string[] {
   const saida: string[] = []
   for (const t of tokens) {
     if (saida.includes(t)) continue
+    // Apelido colado de qualquer trecho contíguo já visto: "cbr 1000 rr cbr1000", "cb 650 f cb650f"
     let colado = false
     for (let i = 0; i < saida.length && !colado; i++) {
-      if (saida.slice(i).join("") === t) colado = true
+      for (let j = i + 2; j <= saida.length && !colado; j++) {
+        if (saida.slice(i, j).join("") === t) colado = true
+      }
     }
     if (!colado) saida.push(t)
   }

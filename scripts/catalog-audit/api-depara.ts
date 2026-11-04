@@ -145,7 +145,13 @@ function main(): void {
   const nivel2 = categorias.filter((c) => caminho(c.id).length === 2)
   const chavesNivel2 = new Set(nivel2.map((c) => chaveModelo(tokenizar(c.nome).join(" "))))
   const modelosClassificados = new Map<string, number>()
-  for (const c of classe.values()) if (c.modelo) modelosClassificados.set(chaveModelo(c.modelo), (modelosClassificados.get(chaveModelo(c.modelo)) ?? 0) + 1)
+  const nomeExibicao = new Map<string, string>()
+  for (const c of classe.values()) {
+    if (!c.modelo) continue
+    const k = chaveModelo(c.modelo)
+    modelosClassificados.set(k, (modelosClassificados.get(k) ?? 0) + 1)
+    if (!nomeExibicao.has(k)) nomeExibicao.set(k, c.modelo)
+  }
   const semCategoriaModelo = Array.from(modelosClassificados.entries()).filter(([k]) => !chavesNivel2.has(k)).sort((a, b) => b[1] - a[1])
 
   // Resumo
@@ -157,7 +163,8 @@ function main(): void {
   const md: string[] = []
   md.push("# De/para de categorias (API Magazord)", "")
   md.push(`- Produtos na API: ${fmt(lista.length)} (ativos: ${fmt(ativos)}; inativos: ${fmt(lista.length - ativos)})`)
-  if (slugs.length) md.push(`- URLs de produto no sitemap: ${fmt(slugs.length)} (ativos na API − sitemap = ${fmt(ativos - slugs.length)})`)
+  if (slugs.length) md.push(`- URLs de produto no sitemap: ${fmt(slugs.length)} (diferença para os ativos da API: ${fmt(ativos - slugs.length)}; aproximação, sem casar URL a URL)`)
+  md.push(`- Linhas extraídas: ${fmt(produtos.length)}; repetidas removidas: ${fmt(produtos.length - lista.length)}`)
   md.push(`- Categorias: ${fmt(categorias.length)} | raízes: ${fmt(categorias.filter((c) => c.pai === null).length)} | nível 2: ${fmt(nivel2.length)}`)
   md.push(`- Principal = categoria técnica (${Array.from(tecnicas).join(", ")}): ${fmt(principalTecnica.length)} (${pct(principalTecnica.length, lista.length)}); entre ativos: ${fmt(principalTecnicaAtivos)} (${pct(principalTecnicaAtivos, ativos)})`, "")
   md.push("## Ação por produto", "", "| Ação | Todos | Ativos | O que fazer |", "|---|---|---|---|")
@@ -168,8 +175,16 @@ function main(): void {
   for (const r of resumoRaiz.slice(0, 30)) md.push(`| ${r.id} | ${r.nome} | ${fmt(r.n)} | ${titulo(r.marca)} | ${pct(r.p, 1)} |`)
   md.push("", "## Nível 3 da árvore atual", "", "| Nome | Ocorrências |", "|---|---|")
   for (const [n, q] of Array.from(nivel3.entries()).sort((a, b) => b[1] - a[1])) md.push(`| ${n} | ${fmt(q)} |`)
-  md.push("", "## Modelos com produtos e sem categoria de modelo na árvore (top 25)", "", "| Modelo (classificado) | Produtos |", "|---|---|")
-  for (const [k, n] of semCategoriaModelo.slice(0, 25)) md.push(`| ${k.toUpperCase()} | ${fmt(n)} |`)
+  md.push(
+    "",
+    "## Modelos classificados sem categoria de mesmo nome na árvore (top 25)",
+    "",
+    "Parte é só grafia diferente (ex.: \"CBR 1000 RR\" × categoria \"CBR 1000 RR FIREBLADE\"): exige de/para de nomes de modelo, não necessariamente categoria nova.",
+    "",
+    "| Modelo (classificado) | Produtos |",
+    "|---|---|",
+  )
+  for (const [k, n] of semCategoriaModelo.slice(0, 25)) md.push(`| ${(nomeExibicao.get(k) ?? k).toUpperCase()} | ${fmt(n)} |`)
   md.push(
     "",
     "## Limitações",
