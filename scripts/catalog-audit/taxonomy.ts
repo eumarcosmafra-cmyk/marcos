@@ -315,3 +315,31 @@ export function classificarSemMarca(url: string, tokens: string[], dicionario: M
     comDetalhe: temDetalhe(tokens),
   }
 }
+
+/**
+ * Classifica um texto livre (nome do produto). Trata marca no fim do nome
+ * ("SUPORTE PEDALEIRA TWISTER CBX 250 HONDA"): procura o modelo no restante.
+ */
+export function classificarTexto(id: string, texto: string, dicionario: Map<string, ModeloConhecido>, familias: Map<string, string>): Classificacao {
+  const tokens = tokenizar(texto)
+  const achado = detectarMarca(tokens)
+  if (!achado) return classificarSemMarca(id, tokens, dicionario, familias)
+  const direto = classificarComMarca(id, tokens, achado)
+  if (direto.modelo) return direto
+  const semMarca = [...tokens.slice(0, achado.inicio), ...tokens.slice(achado.fim)]
+  const r = classificarSemMarca(id, semMarca, dicionario, familias)
+  return { ...r, marca: achado.marca, fonteMarca: "slug" }
+}
+
+/** Aprende modelo -> marca e famílias a partir de textos que trazem marca e modelo explícitos. */
+export function aprenderDicionario(textos: Iterable<string>, minimoModelo = 5, minimoFamilia = 20): { modelos: Map<string, ModeloConhecido>; familias: Map<string, string> } {
+  const d = new DicionarioModelos()
+  for (const texto of textos) {
+    const tokens = tokenizar(texto)
+    const achado = detectarMarca(tokens)
+    if (!achado) continue
+    const c = classificarComMarca("", tokens, achado)
+    if (c.modelo && c.marca) d.registrar(c.modelo, c.marca)
+  }
+  return { modelos: d.consolidar(minimoModelo), familias: d.familias(minimoFamilia) }
+}
