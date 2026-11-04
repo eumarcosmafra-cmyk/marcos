@@ -189,7 +189,8 @@ function main(): void {
     if (!marca) continue
     for (const { cat } of lista) {
       const seq = tokensModelo(cat.nome)
-      if (seq.join("").length >= 3) modelosArvore.push({ seq, id: cat.id, nome: cat.nome.trim(), marca })
+      // Precisa ter parte com letras: "FYM 100" sem a marca viraria só "100" e casaria com medida de pneu
+      if (seq.join("").length >= 3 && seq.some((t) => /[a-z]/.test(t))) modelosArvore.push({ seq, id: cat.id, nome: cat.nome.trim(), marca })
     }
   }
   modelosArvore.sort((a, b) => b.seq.length - a.seq.length || b.seq.join("").length - a.seq.join("").length)

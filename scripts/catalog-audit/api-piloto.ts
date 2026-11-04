@@ -15,7 +15,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { parseArgs } from "node:util"
 import type { CategoriaMagazord, ProdutoMagazord } from "./magazord"
-import { tokenizar } from "./taxonomy"
+import { MARCAS_SLUG, limparModelo, tokenizar } from "./taxonomy"
 
 const CATEGORIA_TECNICA = 10095
 const SEM_SISTEMA = "Não classificado"
@@ -145,16 +145,36 @@ function main(): void {
   // Modelos atuais da raiz (nível 2) e regra 1: fundir variações de grafia e de equipamento (ABS/SE/DLX)
   const modelosAtuais = raiz ? categorias.filter((c) => c.pai === raiz.id) : []
   const nivel3 = new Set(categorias.filter((c) => c.pai !== null && modelosAtuais.some((m) => m.id === c.pai)).map((c) => c.id))
+  const tokensMarca = new Set(MARCAS_SLUG.flatMap((m) => m.tokens))
+  const seqModelos = modelosAtuais
+    .map((m) => ({ m, seq: limparModelo(tokenizar(m.nome).filter((t) => !tokensMarca.has(t))) }))
+    .filter(({ seq }) => seq.join("").length >= 3 && seq.some((t) => /[a-z]/.test(t)))
+    .sort((a, b) => b.seq.length - a.seq.length || b.seq.join("").length - a.seq.join("").length)
+  const casarModeloDaMarca = (nome: string): { nome: string; idAtual: number } | null => {
+    const t = limparModelo(tokenizar(nome))
+    for (const { m, seq } of seqModelos) {
+      for (let i = 0; i + seq.length <= t.length; i++) if (seq.every((x, k) => t[i + k] === x)) return { nome: m.nome.trim(), idAtual: m.id }
+    }
+    return null
+  }
   const modeloDeProduto = (p: ProdutoMagazord): { nome: string | null; idAtual: number | null } => {
     const naArvore = p.categorias.filter((c) => porId.has(c) && caminho(c)[0]?.id === raiz?.id && caminho(c).length >= 2)
     if (naArvore.length) {
       const m = caminho(naArvore[0])[1]
       return { nome: m.nome.trim(), idAtual: m.id }
     }
+    // 1º: modelos da própria marca citados no nome do produto (mais confiável que o classificador global)
+    const daMarcaNoNome = casarModeloDaMarca(p.nome)
+    if (daMarcaNoNome) return daMarcaNoNome
+    // 2º: proposta do classificador, só se o modelo estiver sob a raiz desta marca
     const r = atrib.get(p.id)
     const id = Number(r?.modelo_categoria_id)
     const partes = (r?.nova_principal_proposta ?? "").split(" > ")
-    if (Number.isFinite(id) && porId.has(id)) return { nome: porId.get(id)?.nome.trim() ?? null, idAtual: id }
+    if (Number.isFinite(id) && porId.has(id)) {
+      if (caminho(id)[0]?.id === raiz?.id) return { nome: porId.get(id)?.nome.trim() ?? null, idAtual: id }
+      return { nome: null, idAtual: null }
+    }
+    if (norm(partes[0] ?? "") !== marcaAlvo) return { nome: null, idAtual: null }
     return { nome: partes[1] ?? null, idAtual: null }
   }
 
@@ -171,7 +191,9 @@ function main(): void {
       obs = `Cópia de ${gemeo.codigo} (id ${gemeo.id}, "${gemeo.nome.slice(0, 60)}"). Decidir: desativar a cópia ou unificar.`
     } else if (!nome || /^[\d\s.]+$/.test(nome)) {
       acao = "REVISAR_SEM_MODELO"
-      obs = nome ? `Modelo inválido ("${nome}")` : "Nome do produto não traz o modelo"
+      obs = /\bpneus?\b/i.test(p.nome)
+        ? "Pneu: peça universal (serve por medida, não por modelo). Avaliar categoria própria de Pneus"
+        : nome ? `Modelo inválido ("${nome}")` : "Nome do produto não traz o modelo"
     } else if (p.categorias[0] !== CATEGORIA_TECNICA && caminho(p.categorias[0] ?? -1)[0]?.id === raiz?.id) acao = "AJUSTAR_PRINCIPAL"
     const modelo = acao === "REVISAR_SEM_MODELO" ? null : nome
     return { p, modelo, modeloOriginal: modelo, modeloIdAtual: idAtual, sistema, acao, obs, gemeo }
@@ -197,8 +219,14 @@ function main(): void {
 
   // Fusões decididas por pessoa (ex.: nome canônico pela tabela FIPE): arquivo de;para;obs
   const fusoesManuais = new Map<string, { para: string; obs: string }>()
+  /** Linhas com "para" vazio = decisão de manter o modelo separado (não fundir). */
+  const manterSeparado = new Map<string, string>()
   if (values.fusoes) {
-    for (const r of lerCsv(readFileSync(values.fusoes, "utf-8"))) if (r.de && r.para) fusoesManuais.set(r.de.trim(), { para: r.para.trim(), obs: (r.obs ?? "").trim() })
+    for (const r of lerCsv(readFileSync(values.fusoes, "utf-8"))) {
+      if (!r.de) continue
+      if (r.para?.trim()) fusoesManuais.set(r.de.trim(), { para: r.para.trim(), obs: (r.obs ?? "").trim() })
+      else manterSeparado.set(r.de.trim(), (r.obs ?? "").trim())
+    }
   }
   for (const [de, f] of fusoesManuais) {
     for (const [n, c] of canonico) if (c === de || n === de) canonico.set(n, f.para)
@@ -301,7 +329,11 @@ function main(): void {
   const ligadosHoje = (id: number) => linhas.filter((l) => l.p.categorias.includes(id)).length
   for (const id of nivel3) mud.push(["DESATIVAR_APOS_MIGRACAO", nomeCaminho(id), null, ligadosHoje(id), "Grupo genérico do 3º nível: desativar só depois que os produtos ligados a ele estiverem na estrutura nova (não tem URL pública)"])
   for (const r of arvore.slice(2)) if (r[1].includes(" > ")) mud.push(["CRIAR", null, `${r[1]} > ${r[0]}`, volNo.get(`${r[1].split(" > ")[1]}|${r[0]}`) ?? null, `Subcategoria de sistema (≥ ${corte} produtos)`])
-  for (const [a, b] of revisarFusao) mud.push(["REVISAR_FUSAO", `${nomeRaiz} > ${b}`, `${nomeRaiz} > ${a}`, volumeModelo.get(b) ?? null, "Nome contém outro modelo: confirmar se é a mesma moto"])
+  for (const [a, b] of revisarFusao) {
+    if (manterSeparado.has(b)) continue
+    mud.push(["REVISAR_FUSAO", `${nomeRaiz} > ${b}`, `${nomeRaiz} > ${a}`, volumeModelo.get(b) ?? null, "Nome contém outro modelo: confirmar se é a mesma moto"])
+  }
+  for (const [m, obs] of manterSeparado) mud.push(["MANTER_SEPARADO", `${nomeRaiz} > ${m}`, `${nomeRaiz} > ${m}`, linhas.filter((l) => l.modelo === m).length, `Decisão: não fundir${obs ? `. ${obs}` : ""}`])
   if (raiz && !caminhosExport.size) mud.push(["INFO", null, null, null, "Exportação Magazord não informada: nomes não conferidos"])
   else if (raiz && !caminhosExport.has(nomeRaiz)) mud.push(["INFO", nomeRaiz, null, null, "Raiz não encontrada na exportação Magazord"])
   writeFileSync(join(saida, `mudancas-corte${corte}.csv`), csvExcel(mud))
@@ -346,9 +378,15 @@ function main(): void {
     const n = linhas.filter((l) => l.modelo === m).length
     md.push(`| ${m} | ${fmt(n)} | ${n === 0 ? "Sem produto hoje: mantida" : ""} |`)
   }
-  if (revisarFusao.length) {
+  const pendentes = revisarFusao.filter(([, b]) => !manterSeparado.has(b))
+  if (pendentes.length) {
     md.push("", "### Possíveis fusões para confirmar", "")
-    for (const [a, b] of revisarFusao) md.push(`- "${b}" é o mesmo modelo que "${a}"?`)
+    for (const [a, b] of pendentes) md.push(`- "${b}" é o mesmo modelo que "${a}"?`)
+  }
+  if (fusoesManuais.size || manterSeparado.size) {
+    md.push("", "### Decisões aplicadas", "")
+    for (const [de, f] of fusoesManuais) md.push(`- Fundir "${de}" em "${f.para}"${f.obs ? `: ${f.obs}` : ""}`)
+    for (const [m, obs] of manterSeparado) md.push(`- Manter "${m}" separado${obs ? `: ${obs}` : ""}`)
   }
   md.push("", "## Duplicados", "", "Lista para análise caso a caso: `duplicados.csv` (gerar com `npm run audit:duplicados -- --marca <marca>`).", "")
   md.push("", "## Como aplicar", "", `1. Revisar \`mudancas-corte${corte}.csv\` e as fusões acima.`, `2. Enviar \`categorias-magazord-corte${corte}.csv\` à Magazord para criar/ajustar a árvore.`, `3. Aplicar \`produtos-corte${corte}.csv\`: trocar só a categoria principal; manter as atuais como secundárias.`, "4. Decidir os DUPLICADOS antes de recategorizar as cópias.", "")
