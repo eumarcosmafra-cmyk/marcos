@@ -39,12 +39,14 @@ function fRecorte(text, spec) {
 }
 
 // Mesmo pedido do Pesquisador: o Markdown precisa sair igual nas duas coletas.
-function fCrawl(url) {
+// respeitarRobots=false só na 1ª coleta de links google.com/goto: o robots.txt do Google bloqueia
+// o redirecionamento, e essa coleta serve apenas para descobrir o endereço de destino.
+function fCrawl(url, respeitarRobots) {
   return {
     browser_config: { type: 'BrowserConfig', params: { user_agent: 'MafraSEOResearcher/2.0' } },
     crawler_config: {
       type: 'CrawlerRunConfig',
-      params: { stream: false, cache_mode: 'bypass', page_timeout: 60000, check_robots_txt: true, word_count_threshold: 1, excluded_tags: ['nav', 'footer', 'form', 'button'] },
+      params: { stream: false, cache_mode: 'bypass', page_timeout: 60000, check_robots_txt: respeitarRobots !== false, word_count_threshold: 1, excluded_tags: ['nav', 'footer', 'form', 'button'] },
     },
     urls: [url],
   };
@@ -68,6 +70,22 @@ const F_EXCLUIDOS = [
   /(^|\.)mercadolivre\.com\.br$/u, /(^|\.)amazon\./u, /(^|\.)shopee\./u, /(^|\.)aliexpress\./u,
   /(^|\.)magazineluiza\.com\.br$/u, /(^|\.)americanas\.com\.br$/u,
 ];
+function fGoogle(host) {
+  return /(^|\.)google\./u.test(host || '');
+}
+// Página de aviso de redirecionamento do Google: o destino é o primeiro link externo.
+function fDestinoNoAviso(md) {
+  const urls = [...String(md || '').matchAll(/https:\/\/[^\s)<>"'\]]+/gu)].map((m) => m[0].replace(/[.,;:!?]+$/u, ''));
+  return urls.find((u) => {
+    const h = fHost(u);
+    return h && !fGoogle(h) && !/(^|\.)(gstatic|googleusercontent|googleapis|youtube)\.com$/u.test(h);
+  }) || null;
+}
+// Lojas: muitos preços na página ou nome do site de loja. Não servem para apuração factual.
+function fPaginaDeLoja(md) {
+  return (String(md || '').match(/R\$\s?\d/gu) || []).length >= 4;
+}
+const F_NOME_LOJA = /\b(loja|store|shop|equipamentos|artigos esportivos)\b/iu;
 function fExcluido(host) {
   return !host || F_EXCLUIDOS.some((r) => r.test(host));
 }
@@ -94,6 +112,7 @@ function fCandidatosSerp(pauta, siteUrl, extras) {
     const google = /(^|\.)google\./u.test(host || '');
     if (!google && (fExcluido(host) || host === cliente)) continue;
     if (/reddit|youtube|instagram|facebook|tiktok|pinterest|quora/iu.test(String(r.website_name || ''))) continue;
+    if (F_NOME_LOJA.test(String(r.website_name || ''))) continue;
     add(url, 'serp', { titulo: r.title, rank: r.rank, website_name: r.website_name });
   }
   return out;

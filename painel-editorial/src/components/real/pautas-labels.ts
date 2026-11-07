@@ -22,6 +22,8 @@ export const MOTIVO_CANDIDATO: Record<string, string> = {
   sem_trecho_util: "nenhuma seção relevante com tamanho utilizável",
   mesmo_dominio_ou_excedente: "reserva (mesmo domínio ou excedente)",
   coleta_desalinhada: "falha interna na coleta",
+  redirecionamento_google_nao_resolvido: "link do Google sem destino resolvido",
+  pagina_de_loja: "página de loja (muitos preços)",
 };
 
 export const SITUACAO_CANDIDATO: Record<string, string> = { escolhida: "Escolhida", apta: "Apta", reserva: "Reserva", descartada: "Descartada", coletada: "Coletada" };

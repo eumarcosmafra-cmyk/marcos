@@ -25,7 +25,7 @@ Navegador ──túnel SSH──▶ 127.0.0.1:3100 (painel-editorial, Next.js)
 - **DNS:** registro A `editorial.mafraperformancelab.com.br` → `136.248.117.63`, criado no Plesk (só DNS, sem hospedagem). Não pode haver registro AAAA apontando para outro servidor.
 - **Oracle Security List:** entrada TCP 80 (emissão do certificado) e 443.
 - **Na VPS:** `~/caddy/` com `docker-compose.yml` e `Caddyfile` de `deploy/caddy/`. O Caddy entra na rede `n8n_default` e repassa só para `painel-editorial:3000`.
-- **No painel:** `PAINEL_COOKIE_SECURE=true` no `.env` (também funciona pelo túnel em `localhost`).
+- **No painel:** `PAINEL_COOKIE_SECURE=true` no `.env`. Com isso, o login só funciona pelo endereço HTTPS; pelo túnel `http://127.0.0.1:3100` o navegador não guarda a sessão. Os roteiros de validação usam o HTTPS por padrão.
 - **Para tirar do ar:** `cd ~/caddy && docker compose down`. O túnel continua funcionando.
 
 ## Acesso por túnel (Windows / PowerShell)

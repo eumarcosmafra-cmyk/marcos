@@ -9,7 +9,7 @@ const { chromium } = require("playwright");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const BASE = process.env.BASE_URL || "http://127.0.0.1:3100";
+const BASE = process.env.BASE_URL || "https://editorial.mafraperformancelab.com.br";
 const OUT = process.env.OUT_DIR || "./capturas-producao";
 const TIPO = process.env.SHOT_TIPO === "jpeg" ? "jpeg" : "png";
 const JOB_TESTE = process.env.JOB_TESTE;

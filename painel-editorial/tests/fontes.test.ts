@@ -106,6 +106,27 @@ describe("curadoria de fontes — peças", () => {
     expect(urls.some((u) => u.includes("reddit") || u.includes("youtube") || u.includes("altovaletopteam"))).toBe(false);
   });
 
+  it("links do Google: 1ª coleta sem robots só para eles; aviso de redirecionamento vira destino; loja sai", () => {
+    const validado = rodar(CODIGO_FONTES.validar, [{ modo: "propor", cliente_id: CLIENTE, plano_cache_key: PLANO_KEY, pauta_id: "P001", ator_id: "marcos_mafra", autorizar_cobranca: true }]);
+    const plano = rodar(CODIGO_FONTES.conferirPlano, [linha("plano", PLANO_KEY, planoPayload)], { "Validar pedido": validado });
+    const refs: Record<string, J[]> = { "Validar pedido": validado, "Conferir plano": plano };
+    const cands = rodar(CODIGO_FONTES.prepararCandidatos, [plano[0]], refs);
+    const robots = (c: J) => ((c.crawl as J).crawler_config as { params: { check_robots_txt: boolean } }).params.check_robots_txt;
+    const goto = cands.find((c) => String(c.url_serp).includes("google.com/goto"))!;
+    expect(robots(goto)).toBe(false);
+    expect(cands.filter((c) => c !== goto).every((c) => robots(c) === true)).toBe(true);
+    expect(cands.some((c) => String(c.url_serp).includes("loja.example.com"))).toBe(false);
+    refs["Preparar candidatos"] = cands;
+    // O Google não redireciona: mostra o aviso com o link de destino.
+    const aviso = "# Aviso de redirecionamento\n\nA página que você estava visitando está tentando enviar você para [https://federacao.example.org/guia/](https://federacao.example.org/guia/).\n\nSe você não quiser visitar essa página, [volte](https://www.google.com/) para a anterior.";
+    const respostas = cands.map((c) => (c === goto ? crawl(String(c.url_serp), aviso + "\n\n" + "x".repeat(200)) : crawl(String(c.url_serp), pagina("P", "x"))));
+    const destinos = rodar(CODIGO_FONTES.resolverDestinos, respostas, refs);
+    expect(destinos.find((d) => d.id === goto.id)?.url_final).toBe("https://federacao.example.org/guia/");
+    // Sem link no aviso: descartado com motivo claro.
+    const semLink = rodar(CODIGO_FONTES.resolverDestinos, cands.map((c) => (c === goto ? crawl(String(c.url_serp), "Aviso sem link. " + "y".repeat(250)) : crawl(String(c.url_serp), pagina("P", "x")))), refs);
+    expect((semLink[0].registro as J[]).find((r) => r.id === goto.id)).toMatchObject({ situacao: "descartada", motivo: "redirecionamento_google_nao_resolvido" });
+  });
+
   it("seção escolhida por código passa na mesma conferência do Pesquisador", () => {
     const md = pagina("Guia", "O treino");
     const s = lib.fMelhorSecao(md, lib.fTermos(pauta));

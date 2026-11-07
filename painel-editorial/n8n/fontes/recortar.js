@@ -15,6 +15,7 @@ enviados.forEach((c, i) => {
   const r = respostas.length === enviados.length ? fResultadoCrawl(respostas[i]) : { ok: false, motivo: 'coleta_desalinhada' };
   if (!r.ok) return marcar(c.id, 'descartada', r.motivo);
   if (r.url_final !== c.url_final) return marcar(c.id, 'descartada', 'endereco_instavel');
+  if (fPaginaDeLoja(r.markdown)) return marcar(c.id, 'descartada', 'pagina_de_loja');
   const secao = fMelhorSecao(r.markdown, termos);
   if (!secao) return marcar(c.id, 'descartada', 'sem_trecho_util');
   marcar(c.id, 'apta', null);

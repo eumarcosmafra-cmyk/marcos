@@ -4,4 +4,4 @@ const base = $('Conferir plano').first().json;
 const req = $('Validar pedido').first().json.request;
 const candidatos = fCandidatosSerp(base.pauta, base.plano.site_url, req.urls_extras);
 if (!candidatos.length) return [{ json: { sentinela: true, crawl: { urls: [] }, registro: [] } }];
-return candidatos.map((c) => ({ json: { ...c, crawl: fCrawl(c.url_serp) } }));
+return candidatos.map((c) => ({ json: { ...c, crawl: fCrawl(c.url_serp, !fGoogle(fHost(c.url_serp))) } }));

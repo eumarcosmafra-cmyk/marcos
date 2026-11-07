@@ -12,9 +12,15 @@ enviados.forEach((c, i) => {
   const r = respostas.length === enviados.length ? fResultadoCrawl(respostas[i]) : { ok: false, motivo: 'coleta_desalinhada' };
   let motivo = null;
   let final = null;
-  if (!r.ok) motivo = r.motivo;
+  const google = fGoogle(fHost(c.url_serp));
+  if (!r.ok) motivo = google ? 'redirecionamento_google_nao_resolvido' : r.motivo;
   else {
     final = r.url_final;
+    // Sem redirecionamento automático, o Google mostra um aviso com o link de destino.
+    if (fGoogle(fHost(final))) final = google ? fDestinoNoAviso(r.markdown) : null;
+  }
+  if (r.ok && !final) motivo = 'redirecionamento_google_nao_resolvido';
+  else if (r.ok) {
     const host = fHost(final);
     if (!F_URL_FONTE.test(final)) motivo = 'endereco_final_invalido';
     else if (fExcluido(host)) motivo = 'dominio_excluido';
