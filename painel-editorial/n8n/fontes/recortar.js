@@ -16,7 +16,8 @@ enviados.forEach((c, i) => {
   if (!r.ok) return marcar(c.id, 'descartada', r.motivo);
   if (r.url_final !== c.url_final) return marcar(c.id, 'descartada', 'endereco_instavel');
   if (fPaginaDeLoja(r.markdown)) return marcar(c.id, 'descartada', 'pagina_de_loja');
-  const secao = fMelhorSecao(r.markdown, termos);
+  // Marcadores conferidos nas duas coletas: a página muda entre acessos e o Pesquisador coleta de novo.
+  const secao = fMelhorSecao(r.markdown, termos, typeof c.markdown_1 === 'string' ? c.markdown_1 : undefined);
   if (!secao) return marcar(c.id, 'descartada', 'sem_trecho_util');
   marcar(c.id, 'apta', null);
   aptos.push({ id: c.id, url_final: c.url_final, dominio: c.dominio, titulo: r.titulo || c.titulo_pagina || c.titulo, website_name: c.website_name, ...secao });

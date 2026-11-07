@@ -151,11 +151,15 @@ function fPontuar(texto, titulo, termos) {
   if (/r\$\s?\d/iu.test(texto)) s -= 2;
   return s;
 }
+// Trechos que mudam entre acessos (horários, datas, contadores, blocos de propaganda e "leia também")
+// não servem de marcador: o Pesquisador coleta a página de novo e precisa achar o mesmo início e fim.
+const F_VOLATIL = /\d{1,2}[:h]\d{2}|\d{1,2}\/\d{1,2}|\bh[áa]\s+\d+|\b\d+\s*(min|minutos|hora|horas|dia|dias|coment)|publicidade|an[úu]ncio|patrocinad|leia (tamb[ée]m|mais)|veja (tamb[ée]m|mais)|mais lidas|newsletter/iu;
 // Menor prefixo a partir de `pos` que aparece pela primeira vez exatamente em `pos`.
 function fAncoraInicio(md, pos) {
   for (let len = 24; len <= 160; len += 8) {
     const s = md.slice(pos, pos + len);
     if (s.length < len) return null;
+    if (F_VOLATIL.test(s)) return null;
     if (s.trim().length > 15 && md.indexOf(s) === pos) return s;
   }
   return null;
@@ -165,43 +169,44 @@ function fAncoraFim(md, pos, desde) {
   for (let len = 16; len <= 160; len += 8) {
     const s = md.slice(pos, pos + len);
     if (s.length < 12) return null;
+    if (F_VOLATIL.test(s)) return null;
     if (s.trim().length > 10 && md.indexOf(s, desde) === pos) return s;
   }
   return null;
 }
-// Ajusta o fim da seção: corta seções longas num fim de parágrafo e evita terminar no fim do documento.
-function fFimUtil(md, inicio, fim) {
-  const parag = [];
-  let i = md.indexOf('\n\n', inicio + 1);
-  while (i >= 0 && i < fim) {
-    parag.push(i + 2);
-    i = md.indexOf('\n\n', i + 2);
-  }
-  let alvo = fim;
-  if (fim >= md.length || cleanMarkdown(md.slice(inicio, fim)).length >= 5500) {
-    const candidatos = parag.filter((p) => p < fim && p > inicio + 300 && cleanMarkdown(md.slice(inicio, p)).length < 5000);
-    if (!candidatos.length) return null;
-    alvo = candidatos[candidatos.length - 1];
-  }
-  return alvo;
-}
-function fMelhorSecao(md, termos) {
+// Até 3.500 caracteres limpos: deixa folga para a página crescer (propaganda, links) sem passar dos 6.000 do Pesquisador.
+const F_TRECHO_MAX = 3500;
+// Escolhe a seção mais relevante e marcadores que funcionem nas DUAS coletas da página (md e md2).
+// O fim vai para o início de um parágrafo do próprio texto ou para o próximo título.
+function fMelhorSecao(md, termos, md2) {
   const opcoes = [];
   for (const s of fSecoes(md)) {
-    const fim = fFimUtil(md, s.inicio, s.fim);
-    if (!fim) continue;
-    const bruto = md.slice(s.inicio, fim);
-    const limpo = cleanMarkdown(bruto);
-    if (limpo.length < 300 || limpo.length >= 5500) continue;
-    const pontos = fPontuar(bruto, s.titulo, termos);
-    if (pontos <= 0) continue;
     const inicio = fAncoraInicio(md, s.inicio);
     if (!inicio) continue;
-    const ancoraFim = fAncoraFim(md, fim, s.inicio + inicio.length);
-    if (!ancoraFim) continue;
-    const conf = fRecorte(md, { inicio, fim: ancoraFim });
-    if (!conf.ok) continue;
-    opcoes.push({ localizador: s.titulo || 'Trecho inicial da página', inicio, fim: ancoraFim, trecho: conf.texto, pontuacao: Math.round(pontos * 10) / 10 });
+    const fins = [];
+    let i = md.indexOf('\n\n', s.inicio + 1);
+    while (i >= 0 && i + 2 < s.fim) {
+      fins.push(i + 2);
+      i = md.indexOf('\n\n', i + 2);
+    }
+    if (s.fim < md.length) fins.push(s.fim);
+    fins.sort((a, b) => b - a);
+    for (const fimPos of fins) {
+      const limpo = cleanMarkdown(md.slice(s.inicio, fimPos));
+      if (limpo.length > F_TRECHO_MAX) continue;
+      if (limpo.length < 300) break;
+      const fim = fAncoraFim(md, fimPos, s.inicio + inicio.length);
+      if (!fim) continue;
+      const r1 = fRecorte(md, { inicio, fim });
+      if (!r1.ok) continue;
+      if (typeof md2 === 'string') {
+        const r2 = fRecorte(md2, { inicio, fim });
+        if (!r2.ok || Math.abs(r2.texto.length - r1.texto.length) > 0.5 * r1.texto.length || r2.texto.length >= 6000) continue;
+      }
+      const pontos = fPontuar(md.slice(s.inicio, fimPos), s.titulo, termos);
+      if (pontos > 0) opcoes.push({ localizador: s.titulo || 'Trecho inicial da página', inicio, fim, trecho: r1.texto, pontuacao: Math.round(pontos * 10) / 10 });
+      break;
+    }
   }
   opcoes.sort((a, b) => b.pontuacao - a.pontuacao);
   return opcoes[0] || null;

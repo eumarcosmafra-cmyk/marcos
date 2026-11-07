@@ -29,7 +29,9 @@ enviados.forEach((c, i) => {
   }
   if (final && !motivo) finais.add(final);
   registro.push({ id: c.id, origem: c.origem, url_serp: c.url_serp, url_final: final, dominio: fHost(final), titulo_serp: c.titulo, rank: c.rank, situacao: motivo ? 'descartada' : 'coletada', motivo });
-  if (!motivo) proximos.push({ ...c, url_final: final, dominio: fHost(final), titulo_pagina: r.titulo, crawl: fCrawl(final) });
+  // A 1ª coleta só serve como 2ª versão da página quando já caiu no próprio destino (não no aviso do Google).
+  const mesmaPagina = r.ok && r.url_final === final;
+  if (!motivo) proximos.push({ ...c, url_final: final, dominio: fHost(final), titulo_pagina: r.titulo, markdown_1: mesmaPagina ? r.markdown : null, crawl: fCrawl(final) });
 });
 if (!proximos.length) return [{ json: { sentinela: true, crawl: { urls: [] }, registro } }];
 return proximos.map((c) => ({ json: { ...c, registro } }));

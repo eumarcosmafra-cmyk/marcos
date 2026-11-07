@@ -362,7 +362,9 @@ export function PautaView({ planoId, pautaId }: { planoId: string; pautaId: stri
 
   const ambientes: Ambiente[] = ["producao", "teste"];
   const podeEditar = !(erro instanceof ApiError && erro.status === 403);
-  const podeProduzir = pauta.fontes.estado === "aprovada" && !pauta.trabalhos.some((t) => t.ambiente === "producao");
+  const FALHAS = ["resultado_incerto", "bloqueado_integridade"];
+  const falhou = pauta.trabalhos.filter((t) => t.ambiente === "producao" && FALHAS.includes(t.estado));
+  const podeProduzir = pauta.fontes.estado === "aprovada" && !pauta.trabalhos.some((t) => t.ambiente === "producao" && !FALHAS.includes(t.estado));
 
   return (
     <div>
@@ -408,6 +410,11 @@ export function PautaView({ planoId, pautaId }: { planoId: string; pautaId: stri
           </button>
           {pauta.fontes.estado !== "aprovada" ? <span className="text-xs text-muted">Para produzir, aprove as 3 fontes abaixo.</span> : null}
         </div>
+        {falhou.length ? (
+          <Notice tone="warning" className="mt-3">
+            A produção anterior desta pauta parou ({estadoMeta(falhou[0].estado).label}). Para tentar de novo: <strong>Buscar de novo</strong> as fontes, aprovar as novas e então <strong>Produzir artigo</strong>. O trabalho anterior fica no histórico da fila.
+          </Notice>
+        ) : null}
         {!pauta.integra ? <Notice tone="danger" className="mt-3">Esta pauta não confere com o hash gravado no plano; o Enfileirador vai recusá-la.</Notice> : null}
         {aviso ? <Notice tone="warning" className="mt-3">{aviso}</Notice> : null}
       </header>

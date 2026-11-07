@@ -1,6 +1,6 @@
 // Validação no navegador da tela de Pautas: lista → pauta → buscar fontes → aprovar → (opcional) produzir.
 // "Buscar fontes" faz 1 chamada ao modelo. "Produzir" (PRODUZIR=1) faz até 4 chamadas pagas: só use com autorização.
-// Variáveis: BASE_URL, SENHA_MARCOS_ARQ, PAUTA (ex.: P001), PRODUZIR (0|1), AMBIENTE (producao|teste),
+// Variáveis: BASE_URL, SENHA_MARCOS_ARQ, PAUTA (ex.: P001), PRODUZIR (0|1), FORCAR_BUSCA (0|1), AMBIENTE (producao|teste),
 //            OUT_DIR, SHOT_TIPO (png|jpeg), LIMITE_BUSCA_MS (padrão 7 min)
 const { chromium } = require("playwright");
 const fs = require("node:fs");
@@ -11,6 +11,7 @@ const OUT = process.env.OUT_DIR || "./capturas-pautas";
 const TIPO = process.env.SHOT_TIPO === "jpeg" ? "jpeg" : "png";
 const PAUTA = process.env.PAUTA || "P001";
 const PRODUZIR = process.env.PRODUZIR === "1";
+const FORCAR_BUSCA = process.env.FORCAR_BUSCA === "1";
 const AMBIENTE = process.env.AMBIENTE === "teste" ? "teste" : "producao";
 const LIMITE = Number(process.env.LIMITE_BUSCA_MS || 7 * 60 * 1000);
 const senha = fs.readFileSync(process.env.SENHA_MARCOS_ARQ, "utf8").trim();
@@ -63,7 +64,7 @@ async function lerPauta(page) {
   ok("produzir bloqueado sem fontes aprovadas", pauta.fontes.estado === "aprovada" || (await produzirBtn.isDisabled()));
   await shot(page, "p2-pauta");
 
-  if (pauta.fontes.estado !== "aprovada" || (pauta.fontes.proposta && pauta.fontes.proposta.status !== "pronta")) {
+  if (FORCAR_BUSCA || pauta.fontes.estado !== "aprovada" || (pauta.fontes.proposta && pauta.fontes.proposta.status !== "pronta")) {
     const anterior = pauta.fontes.proposta ? pauta.fontes.proposta.gerado_em : null;
     await page.getByRole("button", { name: /Buscar (fontes|de novo)/ }).first().click();
     const dlg = page.getByRole("dialog");

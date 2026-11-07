@@ -48,6 +48,9 @@ export async function aprovarFontes(user: SessionUser, planoId: string, pautaId:
   return { aprovada: true };
 }
 
+/** Estados em que o trabalho morreu sem artigo utilizável: a pauta pode ser produzida de novo, com fontes novas. */
+export const ESTADOS_DE_FALHA = ["resultado_incerto", "bloqueado_integridade"];
+
 export interface ResultadoProduzir {
   job_key: string;
   ambiente: Ambiente;
@@ -65,7 +68,7 @@ export async function produzirPauta(user: SessionUser, planoId: string, pautaId:
   assertAmbiente(user, body.ambiente);
   const pauta = await obterPauta(user, planoId, pautaId);
   if (pauta.fontes.estado !== "aprovada") throw new PainelError("PAUTA_SEM_FONTES", "Aprove as 3 fontes da pauta antes de produzir.", 422);
-  const existente = pauta.trabalhos.find((t) => t.ambiente === body.ambiente);
+  const existente = pauta.trabalhos.find((t) => t.ambiente === body.ambiente && !ESTADOS_DE_FALHA.includes(t.estado));
   if (existente) {
     throw new PainelError("PAUTA_JA_NA_FILA", "Esta pauta já tem um trabalho neste ambiente.", 409, { job_key: existente.job_key });
   }
@@ -76,6 +79,10 @@ export async function produzirPauta(user: SessionUser, planoId: string, pautaId:
   );
   if (!isRec(r) || typeof r.job_key !== "string" || typeof r.revisao !== "number") {
     throw new PainelError("FILA_RESPOSTA_INVALIDA", "O Enfileirador respondeu sem a chave do trabalho.", 502);
+  }
+  // Mesmas fontes do trabalho que falhou: a fila devolve o mesmo trabalho, e repetir não adiantaria.
+  if (r.resultado_reutilizado === true && ESTADOS_DE_FALHA.includes(String(r.estado))) {
+    throw new PainelError("REPETIR_COM_NOVAS_FONTES", "As fontes aprovadas são as mesmas do trabalho que falhou. Busque e aprove as fontes de novo antes de produzir.", 409, { job_key: r.job_key });
   }
   const base = { job_key: r.job_key, ambiente: body.ambiente, revisao: r.revisao, resultado_reutilizado: r.resultado_reutilizado === true };
   try {

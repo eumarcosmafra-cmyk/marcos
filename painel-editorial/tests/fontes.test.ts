@@ -19,7 +19,7 @@ const lib = new Function(`${CODIGO_FONTES.validar.split("// ---- validar.js ----
   fHash: (v: unknown) => string;
   fRecorte: (t: string, s: { inicio: string; fim: string }) => { ok: boolean; texto?: string; motivo?: string };
   fCandidatosSerp: (p: J, site: string, extras: string[]) => { id: string; url_serp: string; origem: string }[];
-  fMelhorSecao: (md: string, termos: string[]) => { inicio: string; fim: string; trecho: string; localizador: string } | null;
+  fMelhorSecao: (md: string, termos: string[], md2?: string) => { inicio: string; fim: string; trecho: string; localizador: string } | null;
   fTermos: (p: J) => string[];
 };
 
@@ -137,6 +137,34 @@ describe("curadoria de fontes — peças", () => {
     // Sem link no aviso: descartado com motivo claro.
     const semLink = rodar(CODIGO_FONTES.resolverDestinos, cands.map((c) => (c === goto ? crawl(String(c.url_serp), "Aviso sem link. " + "y".repeat(250)) : crawl(String(c.url_serp), pagina("P", "x")))), refs);
     expect((semLink[0].registro as J[]).find((r) => r.id === goto.id)).toMatchObject({ situacao: "descartada", motivo: "redirecionamento_google_nao_resolvido" });
+  });
+
+  it("página que muda entre acessos: marcadores valem nas duas coletas e evitam trechos voláteis", () => {
+    const par = (n: number) => `No boxe profissional, quantos rounds tem uma luta de boxe depende do título em disputa: o bloco ${n} explica que lutas de campeonato têm doze rounds de três minutos, com um minuto de descanso entre eles e regras definidas pela comissão.`;
+    const montar = (anuncio: string, leia: string) =>
+      ["# Boxe", "", "## Quantos rounds tem uma luta de boxe", "", par(1), "", anuncio, "", par(2), "", par(3), "", `## Leia também: ${leia}`, "", "Notícia relacionada qualquer sobre outro esporte e outro assunto do portal de notícias esportivas."].join("\n");
+    const md1 = montar("Texto institucional fixo do portal sobre boxe amador e profissional no Brasil.", "Fulano vence em 12/11 às 21h30");
+    const md2 = montar("Publicidade: assine já o plano anual com desconto exclusivo para leitores do portal esportivo.", "Ciclano perde em 13/11 às 20h15");
+    const termos = lib.fTermos({ keyword: "quantos rounds tem uma luta de boxe", titulo: "Quantos rounds tem uma luta de boxe" });
+    const s = lib.fMelhorSecao(md1, termos, md2);
+    expect(s).not.toBeNull();
+    expect(s!.fim).not.toMatch(/Leia também/);
+    const r1 = lib.fRecorte(md1, s!);
+    const r2 = lib.fRecorte(md2, s!);
+    expect(r1.ok && r2.ok).toBe(true);
+    expect(r1.texto!.length).toBeLessThanOrEqual(3500);
+    // O filtro de trechos voláteis já evita o título "Leia também…" mesmo sem a 2ª versão.
+    expect(lib.fMelhorSecao(md1, termos)!.fim).not.toMatch(/Leia também/);
+    // Título que muda sem palavras voláteis (bloco de recomendação): só a 2ª coleta revela.
+    const variar = (titulo: string) => md1.replace(/## Leia também: .*/u, `## ${titulo}`);
+    const a = variar("Destaques do esporte nacional e internacional");
+    const b = variar("Seleção especial do editor sobre lutas clássicas");
+    const semConferencia = lib.fMelhorSecao(a, termos);
+    expect(semConferencia!.fim).toMatch(/^## Destaques/);
+    expect(lib.fRecorte(b, semConferencia!).ok).toBe(false);
+    const comConferencia = lib.fMelhorSecao(a, termos, b);
+    expect(comConferencia!.fim).not.toMatch(/^## /);
+    expect(lib.fRecorte(a, comConferencia!).ok && lib.fRecorte(b, comConferencia!).ok).toBe(true);
   });
 
   it("seção escolhida por código passa na mesma conferência do Pesquisador", () => {
