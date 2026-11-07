@@ -122,6 +122,18 @@ describe("curadoria de fontes — peças", () => {
     const respostas = cands.map((c) => (c === goto ? crawl(String(c.url_serp), aviso + "\n\n" + "x".repeat(200)) : crawl(String(c.url_serp), pagina("P", "x"))));
     const destinos = rodar(CODIGO_FONTES.resolverDestinos, respostas, refs);
     expect(destinos.find((d) => d.id === goto.id)?.url_final).toBe("https://federacao.example.org/guia/");
+    // Como na VPS: o Crawl4AI segue o redirecionamento e devolve status 301 com o destino em redirected_url.
+    const r301 = (url: string) => {
+      const c = crawl(url, pagina("P", "x"), "https://boaforma.example.com.br/muay-thai/");
+      ((c.body as J).results as J[])[0].status_code = 301;
+      return c;
+    };
+    const comRedir = rodar(CODIGO_FONTES.resolverDestinos, cands.map((c) => (c === goto ? r301(String(c.url_serp)) : crawl(String(c.url_serp), pagina("P", "x")))), refs);
+    expect(comRedir.find((d) => d.id === goto.id)?.url_final).toBe("https://boaforma.example.com.br/muay-thai/");
+    // Na 2ª coleta, a que o Pesquisador repete, 301 continua não valendo.
+    refs["Resolver destinos"] = comRedir;
+    const rec = rodar(CODIGO_FONTES.recortar, comRedir.map((d) => (d.id === goto.id ? r301(String(d.url_final)) : crawl(String(d.url_final), pagina("Q", "y")))), refs);
+    expect((rec[0].registro as J[]).find((r) => r.id === goto.id)).toMatchObject({ situacao: "descartada", motivo: "coleta_falhou" });
     // Sem link no aviso: descartado com motivo claro.
     const semLink = rodar(CODIGO_FONTES.resolverDestinos, cands.map((c) => (c === goto ? crawl(String(c.url_serp), "Aviso sem link. " + "y".repeat(250)) : crawl(String(c.url_serp), pagina("P", "x")))), refs);
     expect((semLink[0].registro as J[]).find((r) => r.id === goto.id)).toMatchObject({ situacao: "descartada", motivo: "redirecionamento_google_nao_resolvido" });

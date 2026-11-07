@@ -9,7 +9,7 @@ const proximos = [];
 const finais = new Set();
 enviados.forEach((c, i) => {
   if (c.sentinela) return;
-  const r = respostas.length === enviados.length ? fResultadoCrawl(respostas[i]) : { ok: false, motivo: 'coleta_desalinhada' };
+  const r = respostas.length === enviados.length ? fResultadoCrawl(respostas[i], true) : { ok: false, motivo: 'coleta_desalinhada' };
   let motivo = null;
   let final = null;
   const google = fGoogle(fHost(c.url_serp));

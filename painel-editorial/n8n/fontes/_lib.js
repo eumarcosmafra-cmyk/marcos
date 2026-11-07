@@ -51,11 +51,15 @@ function fCrawl(url, respeitarRobots) {
     urls: [url],
   };
 }
-function fResultadoCrawl(response) {
+// aceitarRedirecionamento: na 1ª coleta, o Crawl4AI segue o redirecionamento e devolve o status
+// da primeira resposta (301/302) com o destino em redirected_url. Na 2ª coleta (a que o Pesquisador
+// repete), só vale 2xx.
+function fResultadoCrawl(response, aceitarRedirecionamento) {
   const body = response && response.body !== undefined ? response.body : response;
   const row = body && Array.isArray(body.results) ? body.results[0] : null;
   const httpOk = !response || response.statusCode === undefined || response.statusCode === 200;
-  if (!(httpOk && body && body.success === true && body.results.length === 1 && row && row.success === true && row.status_code >= 200 && row.status_code < 300)) {
+  const statusOk = row && ((row.status_code >= 200 && row.status_code < 300) || (aceitarRedirecionamento === true && row.status_code >= 300 && row.status_code < 400 && typeof row.redirected_url === 'string'));
+  if (!(httpOk && body && body.success === true && body.results.length === 1 && row && row.success === true && statusOk)) {
     return { ok: false, motivo: 'coleta_falhou' };
   }
   const md = typeof row.markdown === 'string' ? row.markdown : row.markdown && row.markdown.raw_markdown;
