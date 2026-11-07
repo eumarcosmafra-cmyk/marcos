@@ -112,6 +112,25 @@ cd ~/painel-editorial && docker compose down
 - Para trocar o token: gerar novo valor, atualizar a credencial no n8n e `N8N_ADAPTADOR_TOKEN` no `.env`, depois `docker compose up -d --force-recreate`.
 - Publicar ou alterar workflow pelo CLI do n8n só vale após reiniciar o n8n (`docker restart n8n`). Pela interface do n8n, a publicação é imediata.
 
+## Pautas no painel (curadoria de fontes e produção)
+
+Caminho: **Pautas** → pauta → **Buscar fontes** → **Aprovar estas 3 fontes** → **Produzir artigo** → fila.
+
+| Peça | Onde | O que faz |
+|---|---|---|
+| Planos e pautas | Data Table `I0kHnbGg35Y9RA5Y`, `tipo: plano` (gravados pelo Planejador `5Nv1dKBiFAA7Tn3a`) | Lidos sem trava pelo adaptador (`listar_pautas`), com conferência de hash. |
+| Curadoria de fontes | Workflow `MafraFontesPauta` (`n8n/fontes-pauta.workflow.json`, gerado por `scripts/montar-fontes.mjs`) | `propor`: SERP do plano + URLs do editor → Crawl4AI duas vezes (resolve os links `google.com/goto` e confirma o endereço final) → recorte da melhor seção por código, conferido com a mesma função do Pesquisador → 1 chamada ao DeepSeek, que só escolhe 3 entre as páginas coletadas e escreve entidade e limites (se falhar, escolha automática) → grava `tipo: fontes_pauta_proposta`. `aprovar`: grava a proposta como `tipo: fontes_pauta`. |
+| Enfileirador | `1Y2tf9mzggbGIpHZ` | Monta o pacote sem IA a partir de plano, fontes aprovadas e acervo, e chama `enfileirar` na fila. `scripts/liberar-producao-enfileirador.mjs` libera o ambiente de produção alterando 4 trechos conferidos; os marcadores do contrato do pacote não mudam. |
+| Produção | Painel: `enfileirar_pauta` e depois `retomar_producao` | Pesquisador → Redator → Revisor; a fila acompanha (`?acompanhar=1`). |
+
+Custos mostrados ao editor:
+- busca de fontes: 1 chamada ao DeepSeek;
+- produção: até 4 chamadas (Pesquisador 1, Redator 1, Revisor 2).
+
+Valores em reais não aparecem, porque a ferramenta não os informa.
+
+Validação no navegador: `scripts/validar-pautas.cjs` (`PRODUZIR=0` para parar depois da aprovação das fontes).
+
 ## Correção e retomada (etapas pagas)
 
 - **Solicitar correção** (estado `devolvido`, devolução vigente na versão atual): `preparar_correcao` libera exatamente 3 chamadas novas (Redator 1 + Revisor 2), sem nova pesquisa, e o painel dispara o produtor.
