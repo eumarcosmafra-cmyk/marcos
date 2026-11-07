@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --canvas: #f6f7f9;
+    --surface: #ffffff;
+    --subtle: #f1f3f6;
+    --line: #e2e5ea;
+    --line-strong: #c9ced6;
+    --ink: #171a21;
+    --muted: #4f5866;
+    --faint: #6b7380;
+    color-scheme: light;
+  }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-canvas text-ink antialiased;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  :focus-visible {
+    outline: 2px solid theme("colors.brand.600");
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  ::selection { background: theme("colors.brand.100"); }
+}
+
+@layer components {
+  .card { @apply rounded-lg border border-line bg-surface; }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors
+      disabled:cursor-not-allowed disabled:opacity-55 whitespace-nowrap;
+  }
+  .btn-primary { @apply btn border-brand-700 bg-brand-700 text-white hover:bg-brand-800 hover:border-brand-800; }
+  .btn-secondary { @apply btn border-line-strong bg-surface text-ink hover:bg-subtle; }
+  .btn-ghost { @apply btn border-transparent bg-transparent text-muted hover:bg-subtle hover:text-ink; }
+  .btn-danger { @apply btn border-red-700 bg-surface text-red-800 hover:bg-red-50; }
+  .btn-sm { @apply px-2 py-1 text-xs; }
+  .field-label { @apply mb-1 block text-sm font-medium text-ink; }
+  .field-hint { @apply mt-1 text-xs text-faint; }
+  .input {
+    @apply w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-faint
+      focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-200;
+  }
+  .textarea { @apply input font-mono text-[13px] leading-relaxed; }
+  .table-head { @apply border-b border-line bg-subtle text-left text-xs font-semibold uppercase tracking-wide text-muted; }
+  .chip { @apply inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium; }
+  .demo-tag { @apply chip border-amber-300 bg-amber-50 text-amber-900; }
+  .pending-tag { @apply chip border-slate-300 bg-slate-50 text-slate-700; }
+}
+
+/* Leitura de artigos */
+.article-prose { @apply font-serif text-[17px] leading-[1.75] text-ink; max-width: 72ch; }
+.article-prose > * + * { margin-top: 1.05em; }
+.article-prose .md-h1 { @apply font-sans text-[28px] font-bold leading-tight tracking-tight; margin-top: 0; }
+.article-prose .md-h2 { @apply font-sans text-[21px] font-semibold leading-snug; margin-top: 1.9em; }
+.article-prose .md-h3 { @apply font-sans text-[18px] font-semibold; margin-top: 1.6em; }
+.article-prose .md-h4 { @apply font-sans text-[16px] font-semibold; margin-top: 1.4em; }
+.article-prose p { margin-top: 0.9em; }
+.article-prose ul { @apply list-disc pl-6; }
+.article-prose ol { @apply list-decimal pl-6; }
+.article-prose li + li { margin-top: 0.35em; }
+.article-prose a { @apply text-brand-700 underline decoration-brand-300 underline-offset-2 hover:decoration-brand-700; }
+.article-prose blockquote { @apply border-l-4 border-line-strong pl-4 italic text-muted; }
+.article-prose code { @apply rounded bg-subtle px-1 py-0.5 font-mono text-[0.85em]; }
+.article-prose pre { @apply overflow-x-auto rounded-md bg-subtle p-3 font-mono text-[13px]; }
+.article-prose pre code { @apply bg-transparent p-0; }
+.article-prose table { @apply w-full border-collapse font-sans text-sm; }
+.article-prose th, .article-prose td { @apply border border-line px-2 py-1 text-left align-top; }
+.article-prose hr { @apply border-line; }
+.article-prose strong { @apply font-semibold; }
+
+.prose-compact { @apply text-sm leading-relaxed text-ink; }
+.prose-compact > * + * { margin-top: 0.6em; }
+.prose-compact .md-h1, .prose-compact .md-h2 { @apply text-[15px] font-semibold; margin-top: 1em; }
+.prose-compact .md-h3, .prose-compact .md-h4 { @apply text-sm font-semibold; margin-top: 0.9em; }
+.prose-compact ul { @apply list-disc pl-5; }
+.prose-compact ol { @apply list-decimal pl-5; }
+.prose-compact a { @apply text-brand-700 underline; }
+.prose-compact code { @apply rounded bg-subtle px-1 font-mono text-[0.85em]; }
+
+/* Diferenças */
+.diff-add { background: #e6f4ea; color: #0f5223; }
+.diff-del { background: #fde8e8; color: #8a1c1c; text-decoration: line-through; text-decoration-color: rgba(138,28,28,.45); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}

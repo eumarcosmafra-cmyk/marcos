@@ -1,0 +1,1320 @@
+{
+  "name": "Painel editorial - adaptador autenticado (v1)",
+  "description": "Ponte autenticada entre o painel editorial e a fila V2 (8zHUZGYSA0nPhMWI) / produtor (Kk56hrmdN3ljNUh0). Operações: consultar, salvar_edicao, decidir, preparar_correcao, retomar_producao (responde ao painel e executa o produtor, com autorização de cobrança), ler_trabalho, ler_versao, ler_resumos, listar_pautas, propor_fontes (curadoria MafraFontesPauta, com autorização de cobrança), aprovar_fontes, enfileirar_pauta (Enfileirador 1Y2tf9mzggbGIpHZ).",
+  "active": false,
+  "nodes": [
+    {
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "name": "Receber pedido do painel",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "5b0f7e8e-3c1d-4f6a-9d2e-7a9c1e4b2f10",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "painel-editorial/v1",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CREDENCIAL_ID__",
+          "name": "Painel editorial - token do adaptador"
+        }
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "name": "Validar pedido do painel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Validar pedido do painel\" (modo: executar uma vez para todos os itens).\n// Recebe o corpo do Webhook { operacao, entrada } já autenticado por cabeçalho e\n// decide a rota. Só passam as operações e os campos que o painel precisa.\n// Cliente, editor e workflow de destino são fixos aqui: o chamador não escolhe.\n// Rotas: 'recusa' | 'leitura' (lista de resumos) | 'leitura_trabalho' (um trabalho,\n// sem trava) | 'leitura_pautas' (planos e fontes) | 'fila' (subworkflow 8zHU) |\n// 'producao' (produtor Kk56) | 'fontes_async' / 'fontes_sync' (curadoria MafraFontesPauta) |\n// 'enfileirador' (1Y2tf9mzggbGIpHZ).\nconst CLIENTES_PERMITIDOS = ['altovaletopteam_com_br'];\nconst EDITORES_PERMITIDOS = ['marcos_mafra'];\nconst AMBIENTES = ['producao', 'teste'];\nconst CAMPOS = {\n  consultar: ['cliente_id', 'ambiente', 'job_key', 'cursor'],\n  salvar_edicao: ['cliente_id', 'ambiente', 'job_key', 'op_id', 'revisao_esperada', 'artigo_sha256', 'markdown', 'ator_id'],\n  decidir: ['cliente_id', 'ambiente', 'job_key', 'op_id', 'revisao_esperada', 'artigo_sha256', 'decisao', 'motivos', 'confirmo_revisao_editorial', 'pendencias_sha256', 'justificativa_pendencias', 'ator_id'],\n  preparar_correcao: ['cliente_id', 'ambiente', 'job_key', 'op_id', 'revisao_esperada', 'artigo_sha256', 'autorizar_cobranca', 'ator_id'],\n  retomar_producao: ['cliente_id', 'ambiente', 'job_key', 'revisao_esperada', 'autorizar_cobranca', 'ator_id'],\n  ler_trabalho: ['cliente_id', 'ambiente', 'job_key'],\n  ler_versao: ['cliente_id', 'ambiente', 'job_key', 'numero'],\n  ler_resumos: ['cliente_id', 'ambiente'],\n  listar_pautas: ['cliente_id'],\n  propor_fontes: ['cliente_id', 'plano_cache_key', 'pauta_id', 'ator_id', 'autorizar_cobranca', 'urls_extras'],\n  aprovar_fontes: ['cliente_id', 'plano_cache_key', 'pauta_id', 'ator_id'],\n  enfileirar_pauta: ['cliente_id', 'ambiente', 'plano_cache_key', 'pauta_id', 'ator_id', 'op_id'],\n};\nconst OBRIGATORIOS = {\n  consultar: ['cliente_id', 'ambiente'],\n  salvar_edicao: ['cliente_id', 'ambiente', 'job_key', 'op_id', 'revisao_esperada', 'artigo_sha256', 'markdown', 'ator_id'],\n  decidir: ['cliente_id', 'ambiente', 'job_key', 'op_id', 'revisao_esperada', 'artigo_sha256', 'decisao', 'confirmo_revisao_editorial', 'ator_id'],\n  preparar_correcao: ['cliente_id', 'ambiente', 'job_key', 'op_id', 'revisao_esperada', 'artigo_sha256', 'autorizar_cobranca', 'ator_id'],\n  retomar_producao: ['cliente_id', 'ambiente', 'job_key', 'revisao_esperada', 'autorizar_cobranca', 'ator_id'],\n  ler_trabalho: ['cliente_id', 'ambiente', 'job_key'],\n  ler_versao: ['cliente_id', 'ambiente', 'job_key', 'numero'],\n  ler_resumos: ['cliente_id', 'ambiente'],\n  listar_pautas: ['cliente_id'],\n  propor_fontes: ['cliente_id', 'plano_cache_key', 'pauta_id', 'ator_id', 'autorizar_cobranca'],\n  aprovar_fontes: ['cliente_id', 'plano_cache_key', 'pauta_id', 'ator_id'],\n  enfileirar_pauta: ['cliente_id', 'ambiente', 'plano_cache_key', 'pauta_id', 'ator_id', 'op_id'],\n};\nconst MUTACOES = ['salvar_edicao', 'decidir', 'preparar_correcao'];\nconst ROTA = {\n  ler_resumos: 'leitura',\n  ler_trabalho: 'leitura_trabalho',\n  ler_versao: 'leitura_trabalho',\n  listar_pautas: 'leitura_pautas',\n  retomar_producao: 'producao',\n  propor_fontes: 'fontes_async',\n  aprovar_fontes: 'fontes_sync',\n  enfileirar_pauta: 'enfileirador',\n};\nconst OPERACOES_DE_PAUTA = ['propor_fontes', 'aprovar_fontes', 'enfileirar_pauta'];\n\nfunction recusa(codigo, mensagem) {\n  return [{ json: { rota: 'recusa', http_status: 400, resposta: { ok: false, erro: { codigo, mensagem } } } }];\n}\nconst hex64 = (v) => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v);\nconst inteiroPositivo = (v) => Number.isSafeInteger(v) && v >= 1;\n\nconst itens = $input.all();\nif (itens.length !== 1) return recusa('pedido_multiplo', 'Envie um pedido por chamada.');\nconst corpo = itens[0].json.body;\nif (!corpo || typeof corpo !== 'object' || Array.isArray(corpo)) return recusa('corpo_invalido', 'Corpo ausente ou inválido.');\nconst extras = Object.keys(corpo).filter((k) => !['operacao', 'entrada'].includes(k));\nif (extras.length) return recusa('campo_nao_permitido', 'Campos fora do envelope: ' + extras.join(', '));\nconst operacao = corpo.operacao;\nif (!Object.prototype.hasOwnProperty.call(CAMPOS, operacao)) return recusa('operacao_nao_permitida', 'Operação não liberada para o painel.');\nconst e = corpo.entrada;\nif (!e || typeof e !== 'object' || Array.isArray(e)) return recusa('entrada_invalida', 'Entrada ausente.');\nconst naoPermitidos = Object.keys(e).filter((k) => !CAMPOS[operacao].includes(k));\nif (naoPermitidos.length) return recusa('campo_nao_permitido', 'Campos não permitidos: ' + naoPermitidos.join(', '));\nconst faltando = OBRIGATORIOS[operacao].filter((k) => e[k] === undefined || e[k] === null || e[k] === '');\nif (faltando.length) return recusa('campo_obrigatorio', 'Campos obrigatórios ausentes: ' + faltando.join(', '));\n\nif (!CLIENTES_PERMITIDOS.includes(e.cliente_id)) return recusa('cliente_nao_permitido', 'Cliente fora do escopo do painel.');\nif (CAMPOS[operacao].includes('ambiente') && !AMBIENTES.includes(e.ambiente)) return recusa('ambiente_invalido', 'Ambiente inválido.');\nif (e.job_key !== undefined && !hex64(e.job_key)) return recusa('chave_invalida', 'job_key inválida.');\nif (e.cursor !== undefined && !(Number.isSafeInteger(e.cursor) && e.cursor >= 0)) return recusa('cursor_invalido', 'Cursor inválido.');\nif (e.numero !== undefined && !inteiroPositivo(e.numero)) return recusa('versao_invalida', 'Número de versão inválido.');\n\nif (MUTACOES.includes(operacao)) {\n  if (!EDITORES_PERMITIDOS.includes(e.ator_id)) return recusa('editor_nao_autorizado', 'Ator não autorizado a editar ou decidir.');\n  if (typeof e.op_id !== 'string' || !/^painel:[a-z0-9_]+:[A-Za-z0-9-]{8,80}$/.test(e.op_id) || !e.op_id.startsWith('painel:' + e.ator_id + ':')) {\n    return recusa('op_id_invalido', 'op_id fora do formato do painel.');\n  }\n  if (!inteiroPositivo(e.revisao_esperada)) return recusa('revisao_invalida', 'revisao_esperada inválida.');\n  if (!hex64(e.artigo_sha256)) return recusa('hash_invalido', 'artigo_sha256 inválido.');\n}\nif (OPERACOES_DE_PAUTA.includes(operacao)) {\n  if (!EDITORES_PERMITIDOS.includes(e.ator_id)) return recusa('editor_nao_autorizado', 'Ator não autorizado a operar pautas.');\n  if (typeof e.plano_cache_key !== 'string' || e.plano_cache_key.length > 250 || !e.plano_cache_key.startsWith('plano:' + e.cliente_id + ':')) return recusa('plano_invalido', 'Plano fora do cliente.');\n  if (typeof e.pauta_id !== 'string' || !/^P\\d{3,6}$/.test(e.pauta_id)) return recusa('pauta_invalida', 'Pauta inválida.');\n}\nif (operacao === 'propor_fontes') {\n  if (e.autorizar_cobranca !== true) return recusa('cobranca_nao_autorizada', 'Autorização explícita de chamadas pagas ausente.');\n  const extras = e.urls_extras === undefined ? [] : e.urls_extras;\n  if (!Array.isArray(extras) || extras.length > 5 || !extras.every((u) => typeof u === 'string' && u.length <= 500 && /^https:\\/\\/[^\\s/@:]+\\/\\S*$/.test(u))) {\n    return recusa('urls_extras_invalidas', 'URLs extras inválidas (até 5, https).');\n  }\n}\nif (operacao === 'enfileirar_pauta') {\n  if (typeof e.op_id !== 'string' || !/^painel:[a-z0-9_]+:[A-Za-z0-9-]{8,80}$/.test(e.op_id) || !e.op_id.startsWith('painel:' + e.ator_id + ':')) {\n    return recusa('op_id_invalido', 'op_id fora do formato do painel.');\n  }\n}\nif (operacao === 'preparar_correcao' || operacao === 'retomar_producao') {\n  // Etapas de agente podem gerar cobrança: só seguem com autorização explícita do editor.\n  if (e.autorizar_cobranca !== true) return recusa('cobranca_nao_autorizada', 'Autorização explícita de chamadas pagas ausente.');\n}\nif (operacao === 'retomar_producao') {\n  if (!EDITORES_PERMITIDOS.includes(e.ator_id)) return recusa('editor_nao_autorizado', 'Ator não autorizado a iniciar etapas.');\n  if (!inteiroPositivo(e.revisao_esperada)) return recusa('revisao_invalida', 'revisao_esperada inválida.');\n}\nif (operacao === 'salvar_edicao') {\n  if (typeof e.markdown !== 'string' || e.markdown.length < 200 || e.markdown.length > 800000) return recusa('markdown_invalido', 'O artigo precisa ter entre 200 e 800000 caracteres.');\n}\nif (operacao === 'decidir') {\n  if (!['aprovar', 'devolver'].includes(e.decisao)) return recusa('decisao_invalida', 'Decisão deve ser aprovar ou devolver.');\n  if (e.confirmo_revisao_editorial !== true) return recusa('confirmacao_ausente', 'Confirmação de revisão editorial ausente.');\n  if (e.motivos !== undefined && !(Array.isArray(e.motivos) && e.motivos.length <= 20 && e.motivos.every((t) => typeof t === 'string' && t.trim().length >= 5 && t.length <= 3000))) {\n    return recusa('motivos_invalidos', 'Motivos inválidos.');\n  }\n  if (e.decisao === 'devolver' && !(Array.isArray(e.motivos) && e.motivos.length > 0)) return recusa('devolucao_sem_motivos', 'Devolução exige ao menos um motivo.');\n  if (e.pendencias_sha256 !== undefined && !hex64(e.pendencias_sha256)) return recusa('hash_invalido', 'pendencias_sha256 inválido.');\n  if (e.justificativa_pendencias !== undefined && !(typeof e.justificativa_pendencias === 'string' && e.justificativa_pendencias.length <= 3000)) {\n    return recusa('justificativa_invalida', 'Justificativa inválida.');\n  }\n}\n\nconst pedido = { operacao };\nfor (const k of CAMPOS[operacao]) if (e[k] !== undefined) pedido[k] = e[k];\nreturn [{ json: { rota: ROTA[operacao] || 'fila', operacao, pedido } }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "name": "Pedido recusado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        440,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "a1000000-0000-4000-8000-000000000003-c",
+              "leftValue": "={{ $json.rota }}",
+              "rightValue": "recusa",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000004",
+      "name": "Leitura restrita?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "a1000000-0000-4000-8000-000000000004-c",
+              "leftValue": "={{ $json.rota }}",
+              "rightValue": "leitura",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000005",
+      "name": "Encaminhar pedido à fila",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        400
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Encaminhar pedido à fila\": envia só o pedido validado ao subworkflow.\nreturn [{ json: $input.first().json.pedido }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000006",
+      "name": "Executar operação da fila",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1540,
+        400
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "8zHUZGYSA0nPhMWI",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000007",
+      "name": "Formatar resposta da fila",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        340
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Formatar resposta da fila\" — saída normal do subworkflow 8zHUZGYSA0nPhMWI.\nconst itens = $input.all();\nif (itens.length !== 1) {\n  return [{ json: { http_status: 200, resposta: { ok: false, erro: { codigo: 'resposta_inesperada_da_fila', mensagem: 'A fila devolveu ' + itens.length + ' itens.' } } } }];\n}\nconst r = itens[0].json || {};\nif (r.ok === false) {\n  return [{ json: { http_status: 200, resposta: { ok: false, erro: { codigo: String(r.codigo || 'erro_da_fila'), mensagem: String(r.mensagem || r.codigo || 'A fila recusou a operação.').slice(0, 700) } } } }];\n}\nreturn [{ json: { http_status: 200, resposta: { ok: true, resultado: r } } }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000008",
+      "name": "Formatar falha da fila",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        460
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Formatar falha da fila\" — saída de erro do subworkflow (exceção não tratada).\nconst e = ($input.first() && $input.first().json) || {};\nconst bruto = e.error && typeof e.error === 'object' ? e.error.message || e.error.description : e.error || e.message;\nconst mensagem = String(bruto || 'O subworkflow da fila falhou.').slice(0, 700);\nconst codigo = /^[a-z_]{3,60}$/.test(mensagem) ? mensagem : 'falha_do_subworkflow';\nreturn [{ json: { http_status: 200, resposta: { ok: false, erro: { codigo, mensagem } } } }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000009",
+      "name": "Ler fila do escopo",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        120
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "Z8Fekq9qMO3DRWNA",
+          "mode": "id",
+          "cachedResultName": "SEO V2 - Fila editorial Markdown"
+        },
+        "options": {},
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "cliente_id",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Validar pedido do painel\").first().json.pedido.cliente_id }}"
+            },
+            {
+              "keyName": "ambiente",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Validar pedido do painel\").first().json.pedido.ambiente }}"
+            }
+          ]
+        },
+        "returnAll": true
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-00000000000a",
+      "name": "Leitura restrita da fila",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        120
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Leitura restrita da fila\" (executar uma vez para todos os itens).\n// Somente leitura. Recebe as linhas da Data Table já filtradas por cliente e\n// ambiente, confere a integridade (payload_sha256) e devolve só o necessário:\n//  - ler_resumos: títulos e datas de cada trabalho (a listagem oficial não traz);\n//  - ler_versao: texto de uma versão anterior (a consulta oficial só traz a atual);\n//  - ler_trabalho: o mesmo recibo de `consultar`, sem ocupar a trava global.\n// Cópia literal da função sha256 usada pelos workflows da fila V2 (8zHUZGYSA0nPhMWI).\nfunction sha256(text) {\n  const bytes = Array.from(unescape(encodeURIComponent(text)), c => c.charCodeAt(0));\n  const length = bytes.length * 8;\n  bytes.push(128);\n  while (bytes.length % 64 !== 56) bytes.push(0);\n  for (let i = 7; i >= 0; i--) bytes.push(i >= 4 ? 0 : (length >>> (i * 8)) & 255);\n  const k = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];\n  const h = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];\n  const rr = (v, n) => (v >>> n) | (v << (32 - n));\n  for (let offset = 0; offset < bytes.length; offset += 64) {\n    const w = [];\n    for (let i = 0; i < 16; i++) w[i] = (bytes[offset+i*4]<<24)|(bytes[offset+i*4+1]<<16)|(bytes[offset+i*4+2]<<8)|bytes[offset+i*4+3];\n    for (let i = 16; i < 64; i++) {\n      const a = w[i-15], b = w[i-2];\n      w[i] = (w[i-16] + (rr(a,7)^rr(a,18)^(a>>>3)) + w[i-7] + (rr(b,17)^rr(b,19)^(b>>>10))) | 0;\n    }\n    let [a,b,c,d,e,f,g,j] = h;\n    for (let i = 0; i < 64; i++) {\n      const t1 = (j + (rr(e,6)^rr(e,11)^rr(e,25)) + ((e&f)^(~e&g)) + k[i] + w[i]) | 0;\n      const t2 = ((rr(a,2)^rr(a,13)^rr(a,22)) + ((a&b)^(a&c)^(b&c))) | 0;\n      j=g; g=f; f=e; e=(d+t1)|0; d=c; c=b; b=a; a=(t1+t2)|0;\n    }\n    [a,b,c,d,e,f,g,j].forEach((v,i) => { h[i]=(h[i]+v)|0; });\n  }\n  return h.map(v => (v>>>0).toString(16).padStart(8,'0')).join('');\n}\n\n\nconst pedido = $('Validar pedido do painel').first().json.pedido;\nconst linhas = $input.all().map((i) => i.json).filter((r) => r && r.id);\n\nfunction carregar(row) {\n  if (row.payload_sha256 !== sha256(row.payload_json || '')) return { erro: 'trabalho_alterado' };\n  let j;\n  try {\n    j = JSON.parse(row.payload_json);\n  } catch {\n    return { erro: 'payload_ilegivel' };\n  }\n  if (j.versao !== 'editorial_markdown_v2' || j.job_key !== row.job_key || j.cliente_id !== row.cliente_id || j.ambiente !== row.ambiente) {\n    return { erro: 'identidade_persistida_divergente' };\n  }\n  if (j.cliente_id !== pedido.cliente_id || j.ambiente !== pedido.ambiente) return { erro: 'isolamento_da_fila' };\n  return { j };\n}\n\nfunction tituloH1(markdown) {\n  if (typeof markdown !== 'string') return null;\n  const m = markdown.match(/^#\\s+(.+?)\\s*#*\\s*$/m);\n  return m ? m[1].slice(0, 300) : null;\n}\n\nfunction responder(resposta) {\n  return [{ json: { http_status: 200, resposta } }];\n}\n\nif (pedido.operacao === 'ler_resumos') {\n  const resumos = [];\n  const falhas = [];\n  for (const row of linhas) {\n    const r = carregar(row);\n    if (r.erro) {\n      falhas.push({ job_key: row.job_key, codigo: r.erro });\n      continue;\n    }\n    const pauta = (r.j.pacote && r.j.pacote.research_input && r.j.pacote.research_input.pauta) || {};\n    const atual = r.j.versoes[r.j.versoes.length - 1];\n    resumos.push({\n      job_key: r.j.job_key,\n      titulo_pauta: typeof pauta.titulo === 'string' ? pauta.titulo.slice(0, 300) : null,\n      intencao: typeof pauta.intencao === 'string' ? pauta.intencao : null,\n      tema: typeof pauta.tema === 'string' ? pauta.tema.slice(0, 200) : null,\n      titulo_artigo: atual ? tituloH1(atual.markdown) : null,\n      modo_execucao: r.j.modo_execucao === 'simulado' ? 'simulado' : 'real',\n      criado_em: r.j.criado_em || null,\n      atualizado_em: r.j.atualizado_em || null,\n    });\n  }\n  return responder({ ok: true, resultado: { resumos, falhas } });\n}\n\n// Mesmo recibo de `consultar` (qSummary da fila 8zHU), lido sem a trava global.\n// A trava é compartilhada com o produtor: acompanhar uma etapa paga por `consultar`\n// poderia ocupá-la no instante em que o produtor grava o resultado do agente.\nconst PROXIMA_ETAPA = { aguardando_briefing: 'pesquisador', aguardando_redacao: 'redator', aguardando_revisao: 'revisor' };\n\nif (pedido.operacao === 'ler_trabalho') {\n  const row = linhas.find((r) => r.job_key === pedido.job_key);\n  if (!row) return responder({ ok: false, erro: { codigo: 'trabalho_nao_encontrado', mensagem: 'Trabalho não encontrado neste escopo.' } });\n  const r = carregar(row);\n  if (r.erro) return responder({ ok: false, erro: { codigo: r.erro, mensagem: 'Registro não passou na conferência de integridade.' } });\n  const j = r.j;\n  const v = j.versoes[j.versoes.length - 1];\n  const decisao = j.decisoes[j.decisoes.length - 1];\n  const aprovado = Boolean(\n    j.controle && j.controle.aprovacao_editorial === true && decisao && decisao.decisao === 'aprovar' && v && decisao.artigo_sha256 === v.sha256 && decisao.versao_artigo === v.numero,\n  );\n  const pauta = (j.pacote && j.pacote.research_input && j.pacote.research_input.pauta) || {};\n  const pendencias = Array.isArray(j.pendencias) ? j.pendencias : [];\n  return responder({\n    ok: true,\n    resultado: {\n      job_key: j.job_key,\n      cliente_id: j.cliente_id,\n      pauta_id: j.pauta_id,\n      keyword: pauta.keyword,\n      ambiente: j.ambiente,\n      estado: j.estado,\n      etapa: j.etapa,\n      revisao: j.revisao,\n      versao_artigo: v ? v.numero : 0,\n      artigo_sha256: v ? v.sha256 : null,\n      artigo_markdown: v ? v.markdown : null,\n      decisao_atual: decisao || null,\n      versoes: j.versoes.map(({ markdown, ...meta }) => meta),\n      historico: j.historico,\n      pendencias,\n      pendencias_sha256: sha256(JSON.stringify(j.pendencias)),\n      reserva: j.inflight ? { etapa: j.inflight.etapa, em: j.inflight.em, execucao_id: j.inflight.execucao_id } : null,\n      chamadas_api_reservadas: j.chamadas_api_reservadas,\n      chamadas_api_com_uso_confirmado: j.chamadas_api_com_uso_confirmado,\n      controle: { aprovacao_editorial: aprovado, aprovacao_professor: false, publicacao_autorizada: false },\n      executar_worker: false,\n      chamadas_novas: 0,\n      proxima_etapa: PROXIMA_ETAPA[j.estado] || null,\n      retomada_bloqueada: Boolean(j.inflight || j.estado === 'resultado_incerto'),\n      // Complementos que a consulta oficial não traz.\n      leitura_sem_trava: true,\n      modo_execucao: j.modo_execucao === 'simulado' ? 'simulado' : 'real',\n      max_api_ciclo: Number.isSafeInteger(j.max_api_ciclo) ? j.max_api_ciclo : null,\n      correcao_disponivel: Boolean(j.etapas && j.etapas.pesquisador),\n      titulo_pauta: typeof pauta.titulo === 'string' ? pauta.titulo.slice(0, 300) : null,\n      titulo_artigo: v ? tituloH1(v.markdown) : null,\n      criado_em: j.criado_em || null,\n      atualizado_em: j.atualizado_em || null,\n    },\n  });\n}\n\nif (pedido.operacao === 'ler_versao') {\n  const row = linhas.find((r) => r.job_key === pedido.job_key);\n  if (!row) return responder({ ok: false, erro: { codigo: 'trabalho_nao_encontrado', mensagem: 'Trabalho não encontrado neste escopo.' } });\n  const r = carregar(row);\n  if (r.erro) return responder({ ok: false, erro: { codigo: r.erro, mensagem: 'Registro não passou na conferência de integridade.' } });\n  const v = r.j.versoes.find((x) => x.numero === pedido.numero);\n  if (!v) return responder({ ok: false, erro: { codigo: 'versao_nao_encontrada', mensagem: 'Versão inexistente.' } });\n  return responder({\n    ok: true,\n    resultado: {\n      job_key: r.j.job_key,\n      revisao: r.j.revisao,\n      versao: { numero: v.numero, sha256: v.sha256, origem: v.origem, em: v.em, completa: v.completa, markdown: v.markdown, sha256_confere: sha256(v.markdown) === v.sha256 },\n    },\n  });\n}\n\nreturn responder({ ok: false, erro: { codigo: 'operacao_nao_permitida', mensagem: 'Leitura não suportada.' } });\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-00000000000c",
+      "name": "Leitura de um trabalho?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        880,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "a1000000-0000-4000-8000-00000000000c-c",
+              "leftValue": "={{ $json.rota }}",
+              "rightValue": "leitura_trabalho",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-00000000000d",
+      "name": "Ler trabalho do escopo",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        260
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "Z8Fekq9qMO3DRWNA",
+          "mode": "id",
+          "cachedResultName": "SEO V2 - Fila editorial Markdown"
+        },
+        "options": {},
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "cliente_id",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Validar pedido do painel\").first().json.pedido.cliente_id }}"
+            },
+            {
+              "keyName": "ambiente",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Validar pedido do painel\").first().json.pedido.ambiente }}"
+            },
+            {
+              "keyName": "job_key",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Validar pedido do painel\").first().json.pedido.job_key }}"
+            }
+          ]
+        },
+        "returnAll": true
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-00000000000e",
+      "name": "Iniciar produção?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1100,
+        520
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "a1000000-0000-4000-8000-00000000000e-c",
+              "leftValue": "={{ $json.rota }}",
+              "rightValue": "producao",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-00000000000f",
+      "name": "Encaminhar pedido ao produtor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        640
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Encaminhar pedido ao produtor\": entrega ao produtor Kk56hrmdN3ljNUh0\n// exatamente os campos que ele aceita (o validador dele recusa qualquer outro).\n// A autorização de cobrança só chega aqui se o editor a deu explicitamente no painel.\nconst p = $input.first().json.pedido;\nreturn [{\n  json: {\n    cliente_id: p.cliente_id,\n    ambiente: p.ambiente,\n    job_key: p.job_key,\n    revisao_esperada: p.revisao_esperada,\n    ator_id: p.ator_id,\n    autorizar_cobranca: p.autorizar_cobranca === true,\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000011",
+      "name": "Formatar início da produção",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        640
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Formatar início da produção\": resposta ao painel enviada ANTES de executar\n// o produtor (as etapas de agente podem levar minutos). Confirma só que o pedido foi\n// aceito; o resultado de cada etapa fica no registro da fila e é lido por `ler_trabalho`.\nconst p = $('Encaminhar pedido ao produtor').first().json;\nreturn [{ json: { http_status: 200, resposta: { ok: true, resultado: { producao_iniciada: true, job_key: p.job_key, revisao_esperada: p.revisao_esperada } } } }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000012",
+      "name": "Responder disparo ao painel",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        640
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.resposta }}",
+        "options": {
+          "responseCode": "={{ $json.http_status }}"
+        }
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000013",
+      "name": "Repassar pedido ao produtor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        640
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Repassar pedido ao produtor\": depois de responder ao painel, entrega ao\n// produtor o mesmo pedido validado (a saída do nó de resposta é a resposta, não o pedido).\nreturn [{ json: $('Encaminhar pedido ao produtor').first().json }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000010",
+      "name": "Executar produtor",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        2200,
+        640
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "Kk56hrmdN3ljNUh0",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000014",
+      "name": "Leitura de pautas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1100,
+        760
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "a1000000-0000-4000-8000-000000000014-c",
+              "leftValue": "={{ $json.rota }}",
+              "rightValue": "leitura_pautas",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000015",
+      "name": "Ler planos do cliente",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        760
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "I0kHnbGg35Y9RA5Y",
+          "mode": "id",
+          "cachedResultName": "SEO - Contextos e pesquisa"
+        },
+        "options": {},
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "cliente_id",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Validar pedido do painel\").first().json.pedido.cliente_id }}"
+            },
+            {
+              "keyName": "tipo",
+              "condition": "eq",
+              "keyValue": "plano"
+            }
+          ]
+        },
+        "returnAll": true
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000016",
+      "name": "Ler propostas de fontes",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        760
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "I0kHnbGg35Y9RA5Y",
+          "mode": "id",
+          "cachedResultName": "SEO - Contextos e pesquisa"
+        },
+        "options": {},
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "cliente_id",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Validar pedido do painel\").first().json.pedido.cliente_id }}"
+            },
+            {
+              "keyName": "tipo",
+              "condition": "eq",
+              "keyValue": "fontes_pauta_proposta"
+            }
+          ]
+        },
+        "returnAll": true
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000017",
+      "name": "Ler fontes aprovadas",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        760
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "I0kHnbGg35Y9RA5Y",
+          "mode": "id",
+          "cachedResultName": "SEO - Contextos e pesquisa"
+        },
+        "options": {},
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "cliente_id",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Validar pedido do painel\").first().json.pedido.cliente_id }}"
+            },
+            {
+              "keyName": "tipo",
+              "condition": "eq",
+              "keyValue": "fontes_pauta"
+            }
+          ]
+        },
+        "returnAll": true
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000018",
+      "name": "Montar lista de pautas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        760
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Montar lista de pautas\": planos gravados pelo Planejador, propostas de fontes e\n// fontes aprovadas do cliente. Só leitura da Data Table de contexto, com conferência de hash.\n// Cópia literal da função sha256 usada pelos workflows da fila V2 (8zHUZGYSA0nPhMWI).\nfunction sha256(text) {\n  const bytes = Array.from(unescape(encodeURIComponent(text)), c => c.charCodeAt(0));\n  const length = bytes.length * 8;\n  bytes.push(128);\n  while (bytes.length % 64 !== 56) bytes.push(0);\n  for (let i = 7; i >= 0; i--) bytes.push(i >= 4 ? 0 : (length >>> (i * 8)) & 255);\n  const k = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];\n  const h = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];\n  const rr = (v, n) => (v >>> n) | (v << (32 - n));\n  for (let offset = 0; offset < bytes.length; offset += 64) {\n    const w = [];\n    for (let i = 0; i < 16; i++) w[i] = (bytes[offset+i*4]<<24)|(bytes[offset+i*4+1]<<16)|(bytes[offset+i*4+2]<<8)|bytes[offset+i*4+3];\n    for (let i = 16; i < 64; i++) {\n      const a = w[i-15], b = w[i-2];\n      w[i] = (w[i-16] + (rr(a,7)^rr(a,18)^(a>>>3)) + w[i-7] + (rr(b,17)^rr(b,19)^(b>>>10))) | 0;\n    }\n    let [a,b,c,d,e,f,g,j] = h;\n    for (let i = 0; i < 64; i++) {\n      const t1 = (j + (rr(e,6)^rr(e,11)^rr(e,25)) + ((e&f)^(~e&g)) + k[i] + w[i]) | 0;\n      const t2 = ((rr(a,2)^rr(a,13)^rr(a,22)) + ((a&b)^(a&c)^(b&c))) | 0;\n      j=g; g=f; f=e; e=(d+t1)|0; d=c; c=b; b=a; a=(t1+t2)|0;\n    }\n    [a,b,c,d,e,f,g,j].forEach((v,i) => { h[i]=(h[i]+v)|0; });\n  }\n  return h.map(v => (v>>>0).toString(16).padStart(8,'0')).join('');\n}\n\n\nconst pedido = $('Validar pedido do painel').first().json.pedido;\nconst linhas = (nome) => $(nome).all().map((i) => i.json).filter((r) => r && r.id && r.cliente_id === pedido.cliente_id);\nfunction ler(row) {\n  if (typeof row.payload_json !== 'string' || sha256(row.payload_json) !== row.payload_sha256) return null;\n  try {\n    return JSON.parse(row.payload_json);\n  } catch (e) {\n    return null;\n  }\n}\nconst texto = (v, max) => (typeof v === 'string' ? v.slice(0, max) : null);\nconst falhas = [];\nconst propostas = new Map();\nconst aprovadas = new Map();\nfor (const r of linhas('Ler propostas de fontes')) {\n  const p = ler(r);\n  if (p) propostas.set(r.cache_key, p);\n  else falhas.push({ cache_key: r.cache_key, codigo: 'proposta_alterada' });\n}\nfor (const r of linhas('Ler fontes aprovadas')) {\n  const p = ler(r);\n  if (p) aprovadas.set(r.cache_key, { p, em: r.atualizado_em || r.consultado_em || null });\n  else falhas.push({ cache_key: r.cache_key, codigo: 'fontes_alteradas' });\n}\nconst planos = [];\nfor (const r of linhas('Ler planos do cliente')) {\n  const plano = ler(r);\n  if (!plano || typeof plano.plano_original_json !== 'string' || sha256(plano.plano_original_json) !== plano.plano_sha256) {\n    falhas.push({ cache_key: r.cache_key, codigo: 'plano_alterado' });\n    continue;\n  }\n  const pautas = (Array.isArray(plano.pautas) ? plano.pautas : []).map((pa) => {\n    const h = sha256(JSON.stringify(pa));\n    const chave = 'fontes:' + pedido.cliente_id + ':' + pa.id + ':' + h;\n    const prop = propostas.get(chave);\n    const apr = aprovadas.get(chave);\n    let fontes = { estado: 'nenhuma' };\n    if (prop) {\n      fontes = {\n        estado: prop.status === 'pronta' ? 'proposta' : 'insuficiente',\n        proposta: {\n          status: prop.status,\n          motivo: prop.motivo || null,\n          gerado_em: prop.gerado_em || null,\n          previas: Array.isArray(prop.previas) ? prop.previas : [],\n          candidatos: (Array.isArray(prop.candidatos) ? prop.candidatos : []).map((c) => ({\n            id: c.id,\n            origem: c.origem || null,\n            url: texto(c.url_final || c.url_serp, 500),\n            dominio: c.dominio || null,\n            titulo: texto(c.titulo_serp, 200),\n            situacao: c.situacao || null,\n            motivo: c.motivo || null,\n            fonte: c.fonte || null,\n          })),\n          selecao: prop.selecao || null,\n          urls_extras: Array.isArray(prop.urls_extras) ? prop.urls_extras : [],\n        },\n      };\n    }\n    if (apr) {\n      fontes = {\n        ...fontes,\n        estado: 'aprovada',\n        aprovada_em: apr.em,\n        documentos: (Array.isArray(apr.p.documentos) ? apr.p.documentos : []).map((d) => ({ id: d.id, url: d.url, titulo: d.titulo, entidade: d.entidade, localizador: d.localizador, limites: d.limites })),\n      };\n    }\n    const resultados = pa.serp && Array.isArray(pa.serp.resultados) ? pa.serp.resultados : [];\n    return {\n      id: pa.id,\n      keyword: pa.keyword,\n      titulo: pa.titulo,\n      acao: pa.acao,\n      intencao: pa.intencao || null,\n      prioridade: pa.prioridade || null,\n      status: pa.status || null,\n      tema: pa.tema || null,\n      justificativa: texto(pa.justificativa, 2000),\n      diferenca_acervo: texto(pa.diferenca_acervo, 2000),\n      apuracao_pendente: Array.isArray(pa.apuracao_pendente) ? pa.apuracao_pendente.filter((x) => typeof x === 'string') : [],\n      links_internos: Array.isArray(pa.links_internos_urls) ? pa.links_internos_urls.filter((x) => typeof x === 'string') : [],\n      volume: pa.metricas && typeof pa.metricas.search_volume === 'number' ? pa.metricas.search_volume : null,\n      secundarias: (Array.isArray(pa.secundarias) ? pa.secundarias : []).map((s) => s && s.keyword).filter((k) => typeof k === 'string'),\n      serp: resultados.map((s) => ({ rank: typeof s.rank === 'number' ? s.rank : null, titulo: texto(s.title, 200) || '', site: texto(s.website_name, 120) || '', url: texto(s.url, 500) || '', video: s.is_video === true })),\n      integra: Boolean(plano.pautas_sha256 && plano.pautas_sha256[pa.id] === h),\n      fontes,\n    };\n  });\n  planos.push({ plano_cache_key: r.cache_key, plano_id: plano.plano_id || null, criado_em: plano.criado_em || r.consultado_em || null, site_url: plano.site_url || null, total_pautas: pautas.length, pautas });\n}\nplanos.sort((a, b) => String(b.criado_em || '').localeCompare(String(a.criado_em || '')));\nreturn [{ json: { http_status: 200, resposta: { ok: true, resultado: { planos, falhas } } } }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000019",
+      "name": "Fontes em segundo plano?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1320,
+        960
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "a1000000-0000-4000-8000-000000000019-c",
+              "leftValue": "={{ $json.rota }}",
+              "rightValue": "fontes_async",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-00000000001a",
+      "name": "Encaminhar pedido de fontes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        960
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Encaminhar pedido de fontes\": pedido da curadoria (MafraFontesPauta) no modo propor.\nconst p = $input.first().json.pedido;\nreturn [{ json: { modo: 'propor', cliente_id: p.cliente_id, plano_cache_key: p.plano_cache_key, pauta_id: p.pauta_id, ator_id: p.ator_id, autorizar_cobranca: true, urls_extras: Array.isArray(p.urls_extras) ? p.urls_extras : [] } }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-00000000001b",
+      "name": "Formatar aceite das fontes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        960
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Formatar aceite das fontes\": a coleta e a escolha levam minutos; o painel acompanha pela leitura de pautas.\nconst p = $('Encaminhar pedido de fontes').first().json;\nreturn [{ json: { http_status: 200, resposta: { ok: true, resultado: { proposta_iniciada: true, pauta_id: p.pauta_id } } } }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-00000000001c",
+      "name": "Responder aceite das fontes",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1980,
+        960
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.resposta }}",
+        "options": {
+          "responseCode": "={{ $json.http_status }}"
+        }
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-00000000001d",
+      "name": "Repassar pedido de fontes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        960
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Repassar pedido de fontes\": depois de responder ao painel, entrega à curadoria o pedido (não a resposta).\nreturn [{ json: $('Encaminhar pedido de fontes').first().json }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-00000000001e",
+      "name": "Executar curadoria de fontes",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        2420,
+        960
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MafraFontesPauta",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-00000000001f",
+      "name": "Aprovar fontes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1540,
+        1160
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "a1000000-0000-4000-8000-00000000001f-c",
+              "leftValue": "={{ $json.rota }}",
+              "rightValue": "fontes_sync",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000020",
+      "name": "Encaminhar aprovação de fontes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        1160
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Encaminhar aprovação de fontes\": grava a proposta conferida como fontes_pauta.\nconst p = $input.first().json.pedido;\nreturn [{ json: { modo: 'aprovar', cliente_id: p.cliente_id, plano_cache_key: p.plano_cache_key, pauta_id: p.pauta_id, ator_id: p.ator_id } }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000021",
+      "name": "Executar aprovação de fontes",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1980,
+        1160
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MafraFontesPauta",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000022",
+      "name": "Enfileirar pauta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1760,
+        1360
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "a1000000-0000-4000-8000-000000000022-c",
+              "leftValue": "={{ $json.rota }}",
+              "rightValue": "enfileirador",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000023",
+      "name": "Encaminhar ao enfileirador",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        1360
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Nó Code \"Encaminhar ao enfileirador\": exatamente os campos que o 1Y2tf9mzggbGIpHZ aceita.\n// confirmo_pauta: true, porque a pauta só chega aqui depois de o editor aprovar as fontes e autorizar a produção.\nconst p = $input.first().json.pedido;\nreturn [{ json: { cliente_id: p.cliente_id, ambiente: p.ambiente, plano_cache_key: p.plano_cache_key, pauta_id: p.pauta_id, ator_id: p.ator_id, op_id: p.op_id, confirmo_pauta: true } }];\n"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000024",
+      "name": "Executar enfileirador",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        2200,
+        1360
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "1Y2tf9mzggbGIpHZ",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-00000000000b",
+      "name": "Responder ao painel",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        200
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.resposta }}",
+        "options": {
+          "responseCode": "={{ $json.http_status }}"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Receber pedido do painel": {
+      "main": [
+        [
+          {
+            "node": "Validar pedido do painel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar pedido do painel": {
+      "main": [
+        [
+          {
+            "node": "Pedido recusado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedido recusado?": {
+      "main": [
+        [
+          {
+            "node": "Responder ao painel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Leitura restrita?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leitura restrita?": {
+      "main": [
+        [
+          {
+            "node": "Ler fila do escopo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Leitura de um trabalho?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler fila do escopo": {
+      "main": [
+        [
+          {
+            "node": "Leitura restrita da fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leitura de um trabalho?": {
+      "main": [
+        [
+          {
+            "node": "Ler trabalho do escopo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Leitura de pautas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leitura de pautas?": {
+      "main": [
+        [
+          {
+            "node": "Ler planos do cliente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Iniciar produção?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler planos do cliente": {
+      "main": [
+        [
+          {
+            "node": "Ler propostas de fontes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler propostas de fontes": {
+      "main": [
+        [
+          {
+            "node": "Ler fontes aprovadas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler fontes aprovadas": {
+      "main": [
+        [
+          {
+            "node": "Montar lista de pautas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar lista de pautas": {
+      "main": [
+        [
+          {
+            "node": "Responder ao painel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fontes em segundo plano?": {
+      "main": [
+        [
+          {
+            "node": "Encaminhar pedido de fontes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aprovar fontes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encaminhar pedido de fontes": {
+      "main": [
+        [
+          {
+            "node": "Formatar aceite das fontes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar aceite das fontes": {
+      "main": [
+        [
+          {
+            "node": "Responder aceite das fontes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder aceite das fontes": {
+      "main": [
+        [
+          {
+            "node": "Repassar pedido de fontes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Repassar pedido de fontes": {
+      "main": [
+        [
+          {
+            "node": "Executar curadoria de fontes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aprovar fontes?": {
+      "main": [
+        [
+          {
+            "node": "Encaminhar aprovação de fontes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enfileirar pauta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encaminhar aprovação de fontes": {
+      "main": [
+        [
+          {
+            "node": "Executar aprovação de fontes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Executar aprovação de fontes": {
+      "main": [
+        [
+          {
+            "node": "Formatar resposta da fila",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Formatar falha da fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enfileirar pauta?": {
+      "main": [
+        [
+          {
+            "node": "Encaminhar ao enfileirador",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Encaminhar pedido à fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encaminhar ao enfileirador": {
+      "main": [
+        [
+          {
+            "node": "Executar enfileirador",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Executar enfileirador": {
+      "main": [
+        [
+          {
+            "node": "Formatar resposta da fila",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Formatar falha da fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler trabalho do escopo": {
+      "main": [
+        [
+          {
+            "node": "Leitura restrita da fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Iniciar produção?": {
+      "main": [
+        [
+          {
+            "node": "Encaminhar pedido ao produtor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fontes em segundo plano?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encaminhar pedido ao produtor": {
+      "main": [
+        [
+          {
+            "node": "Formatar início da produção",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar início da produção": {
+      "main": [
+        [
+          {
+            "node": "Responder disparo ao painel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder disparo ao painel": {
+      "main": [
+        [
+          {
+            "node": "Repassar pedido ao produtor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Repassar pedido ao produtor": {
+      "main": [
+        [
+          {
+            "node": "Executar produtor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leitura restrita da fila": {
+      "main": [
+        [
+          {
+            "node": "Responder ao painel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encaminhar pedido à fila": {
+      "main": [
+        [
+          {
+            "node": "Executar operação da fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Executar operação da fila": {
+      "main": [
+        [
+          {
+            "node": "Formatar resposta da fila",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Formatar falha da fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar resposta da fila": {
+      "main": [
+        [
+          {
+            "node": "Responder ao painel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar falha da fila": {
+      "main": [
+        [
+          {
+            "node": "Responder ao painel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "executionTimeout": 1900,
+    "timezone": "America/Sao_Paulo",
+    "callerPolicy": "none"
+  },
+  "pinData": {},
+  "tags": []
+}
