@@ -1,6 +1,6 @@
 # Implantação na VPS — painel editorial MAFRA LABS
 
-O painel roda na mesma VPS do n8n, em um container próprio. Não há domínio nem HTTPS configurados na VPS; por isso o painel **não** abre porta pública: escuta só em `127.0.0.1:3100` e é acessado por túnel SSH.
+O painel roda na mesma VPS do n8n, em um container próprio, e é publicado em **https://editorial.mafraperformancelab.com.br** por um proxy Caddy com certificado Let's Encrypt (`deploy/caddy/`). O container do painel continua escutando só em `127.0.0.1:3100`, o que mantém o acesso por túnel SSH. O n8n não é exposto.
 
 ```
 Navegador ──túnel SSH──▶ 127.0.0.1:3100 (painel-editorial, Next.js)
@@ -20,7 +20,15 @@ Navegador ──túnel SSH──▶ 127.0.0.1:3100 (painel-editorial, Next.js)
                         executado pelo adaptador depois de responder ao painel ("Retomar produção" / "Solicitar correção")
 ```
 
-## Acesso (Windows / PowerShell)
+## HTTPS (Caddy)
+
+- **DNS:** registro A `editorial.mafraperformancelab.com.br` → `136.248.117.63`, criado no Plesk (só DNS, sem hospedagem). Não pode haver registro AAAA apontando para outro servidor.
+- **Oracle Security List:** entrada TCP 80 (emissão do certificado) e 443.
+- **Na VPS:** `~/caddy/` com `docker-compose.yml` e `Caddyfile` de `deploy/caddy/`. O Caddy entra na rede `n8n_default` e repassa só para `painel-editorial:3000`.
+- **No painel:** `PAINEL_COOKIE_SECURE=true` no `.env` (também funciona pelo túnel em `localhost`).
+- **Para tirar do ar:** `cd ~/caddy && docker compose down`. O túnel continua funcionando.
+
+## Acesso por túnel (Windows / PowerShell)
 
 1. Abra o túnel (deixe a janela aberta enquanto usa o painel). O mesmo túnel serve o n8n:
 
