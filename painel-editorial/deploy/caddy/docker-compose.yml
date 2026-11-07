@@ -1,0 +1,24 @@
+# Proxy HTTPS do painel (diretório próprio na VPS: ~/caddy). Não altera o compose do n8n.
+services:
+  caddy:
+    image: caddy:2.8.4
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - n8n_default
+    mem_limit: 128m
+
+networks:
+  n8n_default:
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:

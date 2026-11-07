@@ -1,0 +1,14 @@
+# HTTPS público do painel editorial. Certificado Let's Encrypt automático.
+# Só o painel fica exposto; o n8n continua em 127.0.0.1:5678 (túnel SSH).
+editorial.mafraperformancelab.com.br {
+	encode zstd gzip
+	# Por padrão, o Caddy descarta X-Forwarded-* vindos do cliente e envia o IP real:
+	# o limite de tentativas de login do painel conta por esse IP.
+	reverse_proxy painel-editorial:3000
+	header {
+		# Sem includeSubDomains: os outros subdomínios do site ficam no Plesk.
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	log
+}
