@@ -1,6 +1,6 @@
 "use client";
 
-import { ListChecks, LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { ClipboardList, ListChecks, LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { Link } from "@/state/unsaved-guard";
@@ -41,6 +41,13 @@ export function RealShell({ user, children }: { user: ShellUser; children: React
             <span className="text-[11px] font-medium uppercase tracking-widest text-brand-300">Editorial</span>
           </Link>
           <nav aria-label="Navegação principal" className="flex items-center gap-1">
+            <Link
+              href="/pautas"
+              aria-current={pathname.startsWith("/pautas") ? "page" : undefined}
+              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-slate-200 hover:bg-white/10 aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
+            >
+              <ClipboardList className="h-4 w-4" aria-hidden /> Pautas
+            </Link>
             <Link
               href="/fila"
               aria-current={pathname.startsWith("/fila") ? "page" : undefined}

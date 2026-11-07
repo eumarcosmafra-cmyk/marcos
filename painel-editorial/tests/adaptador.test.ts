@@ -230,7 +230,19 @@ describe("adaptador — respostas e estrutura do workflow", () => {
     expect(webhook?.parameters).toMatchObject({ httpMethod: "POST", authentication: "headerAuth", path: IDS.path, responseMode: "responseNode" });
     expect(webhook?.credentials?.httpHeaderAuth.id).toBe("CRED123");
     const exec = wf.nodes.filter((n) => n.type === "n8n-nodes-base.executeWorkflow");
-    expect(exec.map((n) => (n.parameters.workflowId as { value: string }).value).sort()).toEqual(["8zHUZGYSA0nPhMWI", "Kk56hrmdN3ljNUh0"]);
+    expect(exec.map((n) => (n.parameters.workflowId as { value: string }).value).sort()).toEqual([
+      "1Y2tf9mzggbGIpHZ",
+      "8zHUZGYSA0nPhMWI",
+      "Kk56hrmdN3ljNUh0",
+      "MafraFontesPauta",
+      "MafraFontesPauta",
+    ]);
+    expect(exec.every((n) => (n.parameters.options as { waitForSubWorkflow: boolean }).waitForSubWorkflow === true)).toBe(true);
+    // A curadoria em segundo plano responde ao painel antes de executar, como o produtor.
+    const cadeiaFontes = ["Fontes em segundo plano?", "Encaminhar pedido de fontes", "Formatar aceite das fontes", "Responder aceite das fontes", "Repassar pedido de fontes", "Executar curadoria de fontes"];
+    for (let i = 0; i < cadeiaFontes.length - 1; i += 1) expect(wf.connections[cadeiaFontes[i]].main[0][0].node).toBe(cadeiaFontes[i + 1]);
+    expect(wf.nodes.find((n) => n.name === "Executar curadoria de fontes")?.onError).toBeUndefined();
+    expect(wf.nodes.find((n) => n.name === "Executar enfileirador")?.onError).toBe("continueErrorOutput");
     const fila = exec.find((n) => (n.parameters.workflowId as { value: string }).value === "8zHUZGYSA0nPhMWI");
     const produtor = exec.find((n) => (n.parameters.workflowId as { value: string }).value === "Kk56hrmdN3ljNUh0");
     expect((fila?.parameters.options as { waitForSubWorkflow: boolean }).waitForSubWorkflow).toBe(true);
@@ -243,6 +255,7 @@ describe("adaptador — respostas e estrutura do workflow", () => {
     expect(wf.nodes.find((n) => n.name === "Responder disparo ao painel")?.type).toBe("n8n-nodes-base.respondToWebhook");
     const tabelas = wf.nodes.filter((n) => n.type === "n8n-nodes-base.dataTable");
     expect(tabelas.every((n) => n.parameters.operation === "get")).toBe(true);
+    expect(new Set(tabelas.map((n) => (n.parameters.dataTableId as { value: string }).value))).toEqual(new Set(["Z8Fekq9qMO3DRWNA", "I0kHnbGg35Y9RA5Y"]));
     const porChave = tabelas.find((n) => n.name === "Ler trabalho do escopo");
     expect(JSON.stringify(porChave?.parameters.filters)).toContain('"keyName":"job_key"');
     for (const [origem, c] of Object.entries(wf.connections)) {
@@ -254,3 +267,83 @@ describe("adaptador — respostas e estrutura do workflow", () => {
     expect(wf.settings.executionTimeout as number).toBeGreaterThan(1800);
   });
 });
+
+describe("adaptador — pautas", () => {
+  const PLANO = `plano:${base.cliente_id}:v2_abc`;
+  const codigo = (r: Record<string, unknown>) => (r.resposta as { erro: { codigo: string } }).erro.codigo;
+
+  it("listar_pautas é leitura só com o cliente", () => {
+    expect(validar({ operacao: "listar_pautas", entrada: { cliente_id: base.cliente_id } }).rota).toBe("leitura_pautas");
+    expect(codigo(validar({ operacao: "listar_pautas", entrada: { cliente_id: "outro_cliente" } }))).toBe("cliente_nao_permitido");
+  });
+
+  it("propor_fontes exige editor, autorização e URLs extras https; aprovar não pede cobrança", () => {
+    const p = { cliente_id: base.cliente_id, plano_cache_key: PLANO, pauta_id: "P001", ator_id: "marcos_mafra", autorizar_cobranca: true };
+    expect(validar({ operacao: "propor_fontes", entrada: p }).rota).toBe("fontes_async");
+    expect(validar({ operacao: "propor_fontes", entrada: { ...p, urls_extras: ["https://cbmt.org.br/regras/"] } }).rota).toBe("fontes_async");
+    expect(codigo(validar({ operacao: "propor_fontes", entrada: { ...p, autorizar_cobranca: false } }))).toBe("cobranca_nao_autorizada");
+    expect(codigo(validar({ operacao: "propor_fontes", entrada: { ...p, urls_extras: ["http://x.com/"] } }))).toBe("urls_extras_invalidas");
+    expect(codigo(validar({ operacao: "propor_fontes", entrada: { ...p, ator_id: "leitor_teste" } }))).toBe("editor_nao_autorizado");
+    expect(codigo(validar({ operacao: "propor_fontes", entrada: { ...p, plano_cache_key: "plano:outro:v2_x" } }))).toBe("plano_invalido");
+    const { autorizar_cobranca, ...semCobranca } = p;
+    expect(autorizar_cobranca).toBe(true);
+    expect(validar({ operacao: "aprovar_fontes", entrada: semCobranca }).rota).toBe("fontes_sync");
+    expect(codigo(validar({ operacao: "aprovar_fontes", entrada: p }))).toBe("campo_nao_permitido");
+  });
+
+  it("enfileirar_pauta exige ambiente, op_id do editor e não aceita confirmo_pauta do chamador", () => {
+    const e = { cliente_id: base.cliente_id, ambiente: "producao", plano_cache_key: PLANO, pauta_id: "P001", ator_id: "marcos_mafra", op_id: "painel:marcos_mafra:abcd1234-ef" };
+    const ok = validar({ operacao: "enfileirar_pauta", entrada: e });
+    expect(ok.rota).toBe("enfileirador");
+    const enviado = rodar(CODIGO.encaminharEnfileirador, [ok])[0].json;
+    expect(enviado).toEqual({ ...e, confirmo_pauta: true });
+    expect(codigo(validar({ operacao: "enfileirar_pauta", entrada: { ...e, confirmo_pauta: false } }))).toBe("campo_nao_permitido");
+    expect(codigo(validar({ operacao: "enfileirar_pauta", entrada: { ...e, ambiente: "homologacao" } }))).toBe("ambiente_invalido");
+    expect(codigo(validar({ operacao: "enfileirar_pauta", entrada: { ...e, op_id: "x" } }))).toBe("op_id_invalido");
+  });
+
+  it("curadoria: o aceite sai antes e a curadoria recebe o pedido completo", () => {
+    const v = validar({ operacao: "propor_fontes", entrada: { cliente_id: base.cliente_id, plano_cache_key: PLANO, pauta_id: "P002", ator_id: "marcos_mafra", autorizar_cobranca: true } });
+    const pedido = rodar(CODIGO.encaminharFontes, [v])[0].json;
+    expect(pedido).toEqual({ modo: "propor", cliente_id: base.cliente_id, plano_cache_key: PLANO, pauta_id: "P002", ator_id: "marcos_mafra", autorizar_cobranca: true, urls_extras: [] });
+    const aceite = rodar(CODIGO.aceiteFontes, [{}], { "Encaminhar pedido de fontes": [pedido] })[0].json;
+    expect(aceite.resposta).toEqual({ ok: true, resultado: { proposta_iniciada: true, pauta_id: "P002" } });
+    expect(rodar(CODIGO.repassarFontes, [aceite], { "Encaminhar pedido de fontes": [pedido] })[0].json).toEqual(pedido);
+  });
+
+  it("listar pautas: status de fontes por pauta e plano adulterado vira falha", () => {
+    const sha256 = new Function(`${CODIGO.pautas.split("const pedido")[0]}; return sha256;`)() as (t: string) => string;
+    const hash = (v: unknown) => sha256(JSON.stringify(v));
+    const pautas = [
+      { id: "P001", keyword: "k1", titulo: "T1", acao: "criar", serp: { resultados: [{ rank: 1, title: "R", website_name: "S", url: "https://a.org/", is_video: false }] } },
+      { id: "P002", keyword: "k2", titulo: "T2", acao: "criar" },
+      { id: "P003", keyword: "k3", titulo: "T3", acao: "criar" },
+    ];
+    const original = JSON.stringify({ pautas });
+    const plano = { plano_id: "v2_x", site_url: "https://site.com.br/", plano_sha256: sha256(original), plano_original_json: original, pautas, pautas_sha256: Object.fromEntries(pautas.map((p) => [p.id, hash(p)])), criado_em: "2026-11-01" };
+    const row = (tipo: string, cache_key: string, payload: unknown, id: number) => {
+      const t = JSON.stringify(payload);
+      return { id, tipo, cache_key, cliente_id: base.cliente_id, payload_json: t, payload_sha256: sha256(t) };
+    };
+    const chave = (p: { id: string }) => `fontes:${base.cliente_id}:${p.id}:${hash(p)}`;
+    const docs = [1, 2, 3].map((i) => ({ id: `F${i}`, url: `https://f${i}.org/`, titulo: "t", entidade: "e", localizador: "l", limites: "x", inicio: "i".repeat(20), fim: "f".repeat(12) }));
+    const refs = {
+      "Validar pedido do painel": [{ pedido: { operacao: "listar_pautas", cliente_id: base.cliente_id } }],
+      "Ler planos do cliente": [row("plano", PLANO, plano, 1), { ...row("plano", `plano:${base.cliente_id}:v2_y`, plano, 2), payload_sha256: "0".repeat(64) }],
+      "Ler propostas de fontes": [row("fontes_pauta_proposta", chave(pautas[0]), { status: "pronta", previas: [{ id: "F1" }], candidatos: [], gerado_em: "g" }, 3), row("fontes_pauta_proposta", chave(pautas[1]), { status: "insuficiente", motivo: "menos_de_tres_fontes_aptas", candidatos: [] }, 4)],
+      "Ler fontes aprovadas": [row("fontes_pauta", chave(pautas[0]), { documentos: docs }, 5)],
+    };
+    const out = rodar(CODIGO.pautas, [{}], refs)[0].json;
+    const r = (out.resposta as { resultado: { planos: { pautas: { id: string; fontes: { estado: string; documentos?: unknown[] }; integra: boolean; serp: unknown[] }[] }[]; falhas: { codigo: string }[] } }).resultado;
+    expect(r.planos).toHaveLength(1);
+    expect(r.falhas).toEqual([{ cache_key: `plano:${base.cliente_id}:v2_y`, codigo: "plano_alterado" }]);
+    const [p1, p2, p3] = r.planos[0].pautas;
+    expect(p1.fontes.estado).toBe("aprovada");
+    expect(p1.fontes.documentos).toHaveLength(3);
+    expect(JSON.stringify(p1.fontes)).not.toContain("iiiiiiii");
+    expect(p2.fontes.estado).toBe("insuficiente");
+    expect(p3.fontes.estado).toBe("nenhuma");
+    expect(p1.integra && p1.serp.length === 1).toBe(true);
+  });
+});
+

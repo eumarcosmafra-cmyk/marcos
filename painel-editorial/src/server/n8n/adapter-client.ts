@@ -16,7 +16,11 @@ export type AdapterOperation =
   | "retomar_producao"
   | "ler_trabalho"
   | "ler_versao"
-  | "ler_resumos";
+  | "ler_resumos"
+  | "listar_pautas"
+  | "propor_fontes"
+  | "aprovar_fontes"
+  | "enfileirar_pauta";
 
 export interface AdapterEnvelope {
   ok?: boolean;

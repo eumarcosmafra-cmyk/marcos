@@ -7,8 +7,14 @@ export const CODIGO: {
   encaminharProdutor: string;
   respostaProdutor: string;
   repassarProdutor: string;
+  pautas: string;
+  encaminharFontes: string;
+  aceiteFontes: string;
+  repassarFontes: string;
+  encaminharAprovacao: string;
+  encaminharEnfileirador: string;
 };
-export const IDS: { workflowFila: string; workflowProdutor: string; tabelaFila: string; webhookId: string; path: string; credencialNome: string };
+export const IDS: { workflowFila: string; workflowProdutor: string; workflowFontes: string; workflowEnfileirador: string; tabelaContexto: string; tabelaFila: string; webhookId: string; path: string; credencialNome: string };
 export interface WorkflowNode {
   id: string;
   name: string;

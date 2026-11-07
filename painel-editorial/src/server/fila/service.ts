@@ -22,14 +22,14 @@ type Op = AdapterOperation;
 
 export const ambienteSchema = z.enum(["producao", "teste"]);
 
-function assertAmbiente(user: SessionUser, ambiente: Ambiente): void {
+export function assertAmbiente(user: SessionUser, ambiente: Ambiente): void {
   if (!user.ambientes.includes(ambiente)) throw new PainelError("AMBIENTE_NAO_PERMITIDO", "Seu usuário não acessa este ambiente.", 403);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Chama o adaptador e devolve `resultado`, convertendo recusas da fila em erros com código. */
-async function chamar(operacao: Op, entrada: Record<string, unknown>, tentativas = 1): Promise<unknown> {
+export async function chamar(operacao: Op, entrada: Record<string, unknown>, tentativas = 1): Promise<unknown> {
   let ultimo: PainelError | null = null;
   for (let i = 0; i < tentativas; i += 1) {
     const env: AdapterEnvelope = await callAdapter(operacao, entrada);
@@ -143,14 +143,14 @@ export interface ResultadoProducao {
   erro_producao: { codigo: string; mensagem: string } | null;
 }
 
-async function dispararProdutor(user: SessionUser, ambiente: Ambiente, jobKey: string, revisao: number): Promise<void> {
+export async function dispararProdutor(user: SessionUser, ambiente: Ambiente, jobKey: string, revisao: number): Promise<void> {
   // Uma tentativa só: o disparo não passa pela trava, e repetir às cegas poderia iniciar duas execuções
   // (a fila recusaria a segunda, mas o painel não saberia qual valeu).
   const r = await chamar("retomar_producao", buildProducao(user, ambiente, jobKey, revisao), 1);
   if (!isRec(r) || r.producao_iniciada !== true) throw new PainelError("N8N_RESPOSTA_INVALIDA", "O adaptador não confirmou o disparo do produtor.", 502);
 }
 
-function erroDeDisparo(e: unknown): { codigo: string; mensagem: string } {
+export function erroDeDisparo(e: unknown): { codigo: string; mensagem: string } {
   if (e instanceof PainelError) return { codigo: e.code, mensagem: e.message };
   return { codigo: "ERRO_INESPERADO", mensagem: "Falha inesperada ao iniciar o produtor." };
 }

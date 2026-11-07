@@ -19,7 +19,7 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Ambiente, TrabalhoDTO } from "@/lib/fila-types";
 import { formatDateTime } from "@/lib/format";
 import { useToast } from "@/state/toast";
@@ -89,6 +89,8 @@ export function TrabalhoView({ jobKey, ambiente }: { jobKey: string; ambiente: A
   const [editorKey, setEditorKey] = useState(0);
 
   const recarregar = useCallback(() => setTentativa((n) => n + 1), []);
+  // Vindo de "Produzir artigo" (?acompanhar=1): acompanha desde a primeira leitura, antes de o produtor reservar a etapa.
+  const acompanharDaUrl = useRef<boolean | null>(null);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -107,6 +109,22 @@ export function TrabalhoView({ jobKey, ambiente }: { jobKey: string; ambiente: A
       .finally(() => setCarregando(false));
     return () => ctrl.abort();
   }, [jobKey, ambiente, tentativa]);
+
+  useEffect(() => {
+    if (acompanharDaUrl.current === null) {
+      const qs = new URLSearchParams(window.location.search);
+      acompanharDaUrl.current = qs.get("acompanhar") === "1";
+      if (acompanharDaUrl.current) {
+        qs.delete("acompanhar");
+        const resto = qs.toString();
+        window.history.replaceState(null, "", resto ? `${window.location.pathname}?${resto}` : window.location.pathname);
+      }
+    }
+    if (acompanharDaUrl.current && t && lidoEm) {
+      acompanharDaUrl.current = false;
+      setAcompanhamento({ revisao: t.revisao, desde: lidoEm });
+    }
+  }, [t, lidoEm]);
 
   const reservaVencida = Boolean(t?.reserva && lidoEm - Date.parse(t.reserva.em) > RESERVA_VENCIDA_MS);
   const seguir = Boolean(t && !reservaVencida && (t.acoes.em_producao || (acompanhamento && t.proxima_etapa)));
