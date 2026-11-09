@@ -1,0 +1,474 @@
+<title>Simulador de Árvore de Peças</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: catálogo de desmanche — menu de marca à esquerda, página de categoria ao centro, ficha do produto em gaveta à direita */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --surface-2: #f6f8fa;
+  --ink: #141a21;
+  --muted: #586473;
+  --line: #d9dfe5;
+  --accent: #1c5d86;
+  --accent-soft: #e2eef6;
+  --tag: #f0b429;
+  --tag-ink: #2b2100;
+  --ok: #1d7048; --ok-bg: #e3f3ea;
+  --info: #1c5d86; --info-bg: #e2eef6;
+  --warn: #9a5b00; --warn-bg: #fdf0d9;
+  --bad: #a8261b; --bad-bg: #fbe5e2;
+  --shadow: 0 10px 30px rgba(20, 26, 33, .14);
+  --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1216; --surface: #151b21; --surface-2: #1b232b; --ink: #e6ecf1; --muted: #9aa7b4; --line: #27313b;
+    --accent: #6cb3e0; --accent-soft: #16324a; --tag: #f0b429; --tag-ink: #2b2100;
+    --ok: #6fd3a0; --ok-bg: #15372a; --info: #6cb3e0; --info-bg: #16324a; --warn: #f2b65a; --warn-bg: #3a2a10; --bad: #f08a80; --bad-bg: #3d1a17;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1216; --surface: #151b21; --surface-2: #1b232b; --ink: #e6ecf1; --muted: #9aa7b4; --line: #27313b;
+  --accent: #6cb3e0; --accent-soft: #16324a; --tag: #f0b429; --tag-ink: #2b2100;
+  --ok: #6fd3a0; --ok-bg: #15372a; --info: #6cb3e0; --info-bg: #16324a; --warn: #f2b65a; --warn-bg: #3a2a10; --bad: #f08a80; --bad-bg: #3d1a17;
+  --shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.45; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.top-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding-block: 12px; }
+.brand-title { display: flex; flex-direction: column; min-width: 0; }
+.brand-title h1 { margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 26px; letter-spacing: .01em; text-transform: uppercase; line-height: 1; }
+.brand-title span { color: var(--muted); font-size: 12px; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-left: auto; }
+.field { display: flex; flex-direction: column; gap: 2px; }
+.field label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+select { background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+.toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface-2); }
+.toggle button { border: 0; background: transparent; padding: 7px 14px; font-weight: 600; }
+.toggle button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.toggle button.prop[aria-pressed="true"] { background: var(--tag); color: var(--tag-ink); }
+nav.tabs { display: flex; gap: 4px; overflow-x: auto; }
+nav.tabs button { border: 0; background: none; padding: 10px 12px; border-bottom: 3px solid transparent; font-weight: 600; color: var(--muted); white-space: nowrap; }
+nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; padding-block: 14px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.stat b { display: block; font-family: var(--f-display); font-size: 26px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat small { color: var(--muted); }
+.stat .arrow { color: var(--muted); font-weight: 500; font-size: 18px; padding-inline: 4px; }
+
+.layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 16px; padding-block: 0 32px; align-items: start; }
+aside.menu { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 112px); max-height: calc(100vh - 140px); overflow: auto; }
+.menu-head { padding: 12px 14px; border-bottom: 1px solid var(--line); font-family: var(--f-display); font-size: 18px; font-weight: 700; text-transform: uppercase; display: flex; justify-content: space-between; gap: 8px; }
+.menu-head button { border: 0; background: none; padding: 0; font: inherit; text-transform: inherit; color: var(--ink); text-align: left; }
+.menu ul { list-style: none; margin: 0; padding: 0; }
+.menu li > .row { display: flex; align-items: center; gap: 6px; padding: 6px 14px; }
+.menu li > .row:hover { background: var(--surface-2); }
+.menu .row button.name { flex: 1; text-align: left; border: 0; background: none; padding: 0; min-width: 0; overflow-wrap: anywhere; }
+.menu .row .count { font-family: var(--f-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.menu .row.active { background: var(--accent-soft); }
+.menu .row.active button.name { font-weight: 600; color: var(--accent); }
+.menu .row.vazio button.name { color: var(--muted); font-style: italic; }
+.menu .row.tecnica button.name { color: var(--bad); font-weight: 600; }
+.menu .twisty { width: 18px; height: 18px; border: 0; background: none; padding: 0; color: var(--muted); display: inline-grid; place-items: center; flex: none; }
+.menu ul ul .row { padding-left: 38px; }
+.menu ul ul ul .row { padding-left: 58px; }
+
+main.page { min-width: 0; display: flex; flex-direction: column; gap: 14px; scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 124px); }
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); }
+.crumbs button { border: 0; background: none; padding: 0; color: var(--accent); }
+.crumbs .sep { color: var(--muted); }
+.crumbs .tec { color: var(--bad); font-weight: 600; }
+.crumbs .cur { color: var(--ink); font-weight: 600; }
+.cat-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px 16px; }
+.cat-head h2 { margin: 0; font-family: var(--f-display); font-weight: 700; font-size: clamp(28px, 4vw, 40px); text-transform: uppercase; line-height: 1; text-wrap: balance; }
+.cat-head p { margin: 4px 0 0; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 11px; font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+.chip .n { font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.chip[aria-pressed="true"] .n { color: inherit; opacity: .8; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+input[type="search"] { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; width: min(320px, 100%); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px; text-align: left; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.card:hover { border-color: var(--accent); }
+.card .code { font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.card .nm { font-weight: 500; overflow-wrap: anywhere; }
+.card .foot { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; }
+.b-RECATEGORIZAR { background: var(--info-bg); color: var(--info); }
+.b-AJUSTAR_PRINCIPAL { background: var(--ok-bg); color: var(--ok); }
+.b-DUPLICADO { background: var(--warn-bg); color: var(--warn); }
+.b-REVISAR_SEM_MODELO { background: var(--bad-bg); color: var(--bad); }
+.b-sis { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); text-transform: none; font-weight: 500; }
+.b-inativo { background: var(--surface-2); color: var(--muted); }
+.more { align-self: center; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 8px 16px; font-weight: 600; }
+.empty { padding: 28px; text-align: center; color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; }
+
+.models { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.model { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px; text-align: left; display: flex; flex-direction: column; gap: 4px; }
+.model:hover { border-color: var(--accent); }
+.model b { font-family: var(--f-display); font-size: 20px; font-weight: 600; text-transform: uppercase; line-height: 1.05; overflow-wrap: anywhere; }
+.model small { color: var(--muted); }
+.model.vazio { opacity: .6; }
+.model.tecnica { border-color: var(--bad); }
+.model.tecnica b { color: var(--bad); }
+
+.note { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--tag); border-radius: 6px; padding: 10px 12px; color: var(--ink); }
+.note.bad { border-left-color: var(--bad); }
+
+.drawer-bg { position: fixed; inset: 0; background: rgba(10, 14, 18, .45); z-index: 20; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100%); background: var(--surface); z-index: 21; box-shadow: var(--shadow); overflow: auto; padding: calc(env(safe-area-inset-top, 0px) + 16px) max(18px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 24px) 18px; display: flex; flex-direction: column; gap: 14px; }
+.drawer h3 { margin: 0; font-family: var(--f-display); font-size: 26px; text-transform: uppercase; line-height: 1.05; text-wrap: balance; overflow-wrap: anywhere; }
+.drawer .close { align-self: flex-end; border: 1px solid var(--line); background: var(--surface-2); border-radius: 6px; padding: 4px 10px; }
+.box { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.box > .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.box.hoje { background: var(--surface-2); }
+.box.prop { border-color: var(--tag); }
+pre.code { margin: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 10px; font-family: var(--f-mono); font-size: 12px; overflow-x: auto; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; font-size: 13px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: var(--surface-2); position: sticky; top: 0; }
+td.mono { font-family: var(--f-mono); font-size: 12px; white-space: nowrap; }
+td.num { font-variant-numeric: tabular-nums; text-align: right; }
+tr.clk { cursor: pointer; }
+tr.clk:hover td { background: var(--surface-2); }
+.section-title { font-family: var(--f-display); font-size: 22px; font-weight: 700; text-transform: uppercase; margin: 0; }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  aside.menu { position: static; max-height: 46vh; }
+  .pair { grid-template-columns: minmax(0, 1fr); }
+  .controls { margin-left: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .drawer { animation: slide .18s ease-out; }
+  @keyframes slide { from { transform: translateX(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+}
+</style>
+
+<header class="top">
+  <div class="wrap top-row">
+    <div class="brand-title">
+      <h1>Simulador de árvore</h1>
+      <span id="subtitulo">Marca › Modelo › Sistema · dados reais do piloto</span>
+    </div>
+    <div class="controls">
+      <div class="field">
+        <label for="sel-marca">Marca</label>
+        <select id="sel-marca"></select>
+      </div>
+      <div class="field">
+        <label>Estrutura</label>
+        <div class="toggle" role="group" aria-label="Estrutura">
+          <button type="button" id="btn-hoje" aria-pressed="false">Hoje</button>
+          <button type="button" id="btn-prop" class="prop" aria-pressed="true">Proposta</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="wrap">
+    <nav class="tabs" role="tablist" aria-label="Seções">
+      <button type="button" role="tab" id="tab-navegar" aria-selected="true">Navegar como visitante</button>
+      <button type="button" role="tab" id="tab-pend" aria-selected="false">Pendências</button>
+      <button type="button" role="tab" id="tab-mud" aria-selected="false">Mudanças na árvore</button>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <section class="stats" id="stats" aria-label="Resumo"></section>
+</div>
+
+<div class="wrap" id="view-navegar">
+  <div class="layout">
+    <aside class="menu" id="menu" aria-label="Menu de categorias"></aside>
+    <main class="page" id="pagina"></main>
+  </div>
+</div>
+<div class="wrap" id="view-pend" hidden></div>
+<div class="wrap" id="view-mud" hidden></div>
+
+<div class="drawer-bg" id="drawer-bg" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-label="Produto"></aside>
+
+<script type="application/json" id="dados">__DADOS__</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById("dados").textContent);
+  const ACOES = {
+    RECATEGORIZAR: { rot: "Sai do Mercado Livre", curto: "Recategorizar" },
+    AJUSTAR_PRINCIPAL: { rot: "Sai do grupo genérico", curto: "Ajustar" },
+    DUPLICADO: { rot: "Duplicado", curto: "Duplicado" },
+    REVISAR_SEM_MODELO: { rot: "Sem modelo", curto: "Revisar" },
+  };
+  const TECNICAS = ["mercado livre", "produtos novo", "produtos antigos", "itens promocionais"];
+  const GENERICOS = ["conjunto peças chassi", "peças motor", "motor completo"];
+  const SEM_CAT = "Sem categoria (revisar)";
+  const st = { marca: 0, modo: "prop", caminho: [], filtro: "todos", busca: "", limite: 48, aba: "navegar", abertos: new Set(), pend: "dup" };
+  try { const s = JSON.parse(localStorage.getItem("simulador-estado") || "{}"); if (typeof s.marca === "number" && D.marcas[s.marca]) st.marca = s.marca; if (s.modo === "hoje" || s.modo === "prop") st.modo = s.modo; } catch (e) { /* armazenamento indisponível */ }
+  const salvar = () => { try { localStorage.setItem("simulador-estado", JSON.stringify({ marca: st.marca, modo: st.modo })); } catch (e) { /* ignora */ } };
+
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const fmt = (n) => Number(n).toLocaleString("pt-BR");
+  const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const ehTec = (nome) => TECNICAS.includes(String(nome).toLowerCase());
+  const ehGen = (nome) => GENERICOS.includes(String(nome).toLowerCase());
+  const marca = () => D.marcas[st.marca];
+  const caminhoDe = (p) => (st.modo === "prop" ? (p.dp || [SEM_CAT]) : p.an);
+
+  // Árvore genérica a partir de caminhos
+  function arvore(m, modo) {
+    const raiz = { nome: "", filhos: new Map(), total: 0, vazio: false };
+    const add = (cam, conta) => {
+      let no = raiz;
+      if (conta) raiz.total++;
+      for (const parte of cam) {
+        if (!no.filhos.has(parte)) no.filhos.set(parte, { nome: parte, filhos: new Map(), total: 0, vazio: false });
+        no = no.filhos.get(parte);
+        if (conta) no.total++;
+      }
+    };
+    for (const p of m.produtos) add(modo === "prop" ? (p.dp || [SEM_CAT]) : p.an, true);
+    if (modo === "prop") for (const cam of m.arvore) add(cam, false);
+    return raiz;
+  }
+  const ordenar = (nos) => Array.from(nos.values()).sort((a, b) => {
+    const pa = a.nome === SEM_CAT || ehTec(a.nome) ? 1 : 0, pb = b.nome === SEM_CAT || ehTec(b.nome) ? 1 : 0;
+    return pa - pb || a.nome.localeCompare(b.nome, "pt-BR", { numeric: true });
+  });
+
+  function noDoCaminho(r, cam) { let no = r; for (const p of cam) { no = no.filhos.get(p); if (!no) return null; } return no; }
+
+  function crumbs(cam, clicavel) {
+    const partes = ["Início", ...cam];
+    return partes.map((p, i) => {
+      const ult = i === partes.length - 1;
+      const cls = ehTec(p) || p === SEM_CAT ? "tec" : ult ? "cur" : "";
+      const conteudo = clicavel && !ult ? `<button type="button" data-cam="${esc(JSON.stringify(cam.slice(0, i)))}">${esc(p)}</button>` : `<span class="${cls}">${esc(p)}</span>`;
+      return conteudo + (ult ? "" : `<span class="sep" aria-hidden="true">›</span>`);
+    }).join("");
+  }
+
+  // ---------- Stats ----------
+  function renderStats() {
+    const m = marca();
+    const conta = (modo) => { let n = 0; const walk = (no) => { for (const f of no.filhos.values()) { n++; walk(f); } }; walk(arvore(m, modo)); return n; };
+    const ml = m.produtos.filter((p) => p.an[0] && ehTec(p.an[0])).length;
+    const gen = m.produtos.filter((p) => ehGen(p.an[p.an.length - 1])).length;
+    const dup = m.produtos.filter((p) => p.ac === "DUPLICADO").length;
+    const rev = m.produtos.filter((p) => p.ac === "REVISAR_SEM_MODELO").length;
+    document.getElementById("stats").innerHTML = [
+      `<div class="stat"><b>${fmt(m.produtos.length)}</b><small>produtos da marca</small></div>`,
+      `<div class="stat"><b>${fmt(conta("hoje"))}<span class="arrow">→</span>${fmt(conta("prop"))}</b><small>categorias: hoje → proposta</small></div>`,
+      `<div class="stat"><b>${fmt(ml)}<span class="arrow">→</span>0</b><small>com principal em categoria técnica (Mercado Livre)</small></div>`,
+      `<div class="stat"><b>${fmt(gen)}<span class="arrow">→</span>0</b><small>em grupo genérico ("Conjunto peças chassi"…)</small></div>`,
+      `<div class="stat"><b>${fmt(dup)} · ${fmt(rev)}</b><small>duplicados · sem modelo (decisão da loja)</small></div>`,
+    ].join("");
+  }
+
+  // ---------- Menu ----------
+  function renderMenu() {
+    const m = marca();
+    const r = arvore(m, st.modo);
+    const linha = (no, cam, nivel) => {
+      const key = JSON.stringify(cam);
+      const ativo = JSON.stringify(st.caminho) === key;
+      const temFilhos = no.filhos.size > 0 && nivel < 3;
+      const aberto = st.abertos.has(key) || st.caminho.length > cam.length && JSON.stringify(st.caminho.slice(0, cam.length)) === key;
+      const cls = ["row", ativo ? "active" : "", no.total === 0 ? "vazio" : "", ehTec(no.nome) || no.nome === SEM_CAT ? "tecnica" : ""].join(" ");
+      const tw = temFilhos ? `<button type="button" class="twisty" data-tw="${esc(key)}" aria-expanded="${aberto}" aria-label="${aberto ? "Recolher" : "Expandir"} ${esc(no.nome)}">${aberto ? "▾" : "▸"}</button>` : `<span class="twisty" aria-hidden="true"></span>`;
+      let html = `<li><div class="${cls}">${tw}<button type="button" class="name" data-cam="${esc(key)}">${esc(no.nome)}</button><span class="count">${no.total ? fmt(no.total) : "—"}</span></div>`;
+      if (temFilhos && aberto) html += `<ul>${ordenar(no.filhos).map((f) => linha(f, [...cam, f.nome], nivel + 1)).join("")}</ul>`;
+      return html + "</li>";
+    };
+    document.getElementById("menu").innerHTML =
+      `<div class="menu-head"><button type="button" data-cam="[]">${esc(st.modo === "prop" ? "Menu proposto" : "Menu de hoje")}</button><span class="count">${fmt(m.produtos.length)}</span></div>` +
+      `<ul>${ordenar(r.filhos).map((f) => linha(f, [f.nome], 1)).join("")}</ul>`;
+  }
+
+  // ---------- Página de categoria ----------
+  function produtosDoCaminho() {
+    const m = marca();
+    const cam = st.caminho;
+    return m.produtos.filter((p) => { const c = caminhoDe(p); return cam.every((x, i) => c[i] === x); });
+  }
+  function renderPagina() {
+    const m = marca();
+    const r = arvore(m, st.modo);
+    const no = st.caminho.length ? noDoCaminho(r, st.caminho) : r;
+    const el = document.getElementById("pagina");
+    if (!no) { st.caminho = []; return renderPagina(); }
+    const titulo = st.caminho.length ? st.caminho[st.caminho.length - 1] : (st.modo === "prop" ? m.nome : "Todas as categorias");
+    const base = produtosDoCaminho();
+    let html = `<nav class="crumbs" aria-label="Breadcrumb">${crumbs(st.caminho, true)}</nav>`;
+    html += `<div class="cat-head"><div><h2>${esc(titulo)}</h2><p>${fmt(base.length)} produto${base.length === 1 ? "" : "s"}${st.caminho.length ? "" : st.modo === "prop" ? " · escolha o modelo da sua moto" : " · como as categorias estão organizadas hoje"}</p></div></div>`;
+
+    if (ehTec(titulo)) html += `<div class="note bad">Categoria técnica usada como principal: o breadcrumb do produto mostra "${esc(titulo)}" e não tem link. É o que está hoje no site.</div>`;
+    if (titulo === SEM_CAT) html += `<div class="note bad">Produtos sem modelo identificado no nome. Ficam aqui até a loja definir o modelo (veja a aba Pendências).</div>`;
+    if (no.total === 0) html += `<div class="note">Categoria mantida sem produtos hoje, para receber peças de novas motos desmontadas.</div>`;
+
+    const filhos = ordenar(no.filhos);
+    // Início e página da marca: cartões (escolha da categoria / do modelo). Modelo e abaixo: chips + produtos.
+    const comoCartoes = filhos.length > 0 && st.caminho.length <= 1;
+    if (comoCartoes) {
+      html += `<div class="models">${filhos.map((f) => `<button type="button" class="model ${f.total === 0 ? "vazio" : ""} ${ehTec(f.nome) || f.nome === SEM_CAT ? "tecnica" : ""}" data-cam="${esc(JSON.stringify([...st.caminho, f.nome]))}"><b>${esc(f.nome)}</b><small>${f.total ? `${fmt(f.total)} peça${f.total === 1 ? "" : "s"}` : "sem peças hoje"}${f.filhos.size ? ` · ${f.filhos.size} subcategoria${f.filhos.size === 1 ? "" : "s"}` : ""}</small></button>`).join("")}</div>`;
+    } else if (filhos.length) {
+      html += `<div class="chips" aria-label="Subcategorias">${filhos.map((f) => `<button type="button" class="chip" data-cam="${esc(JSON.stringify([...st.caminho, f.nome]))}">${esc(f.nome)} <span class="n">${fmt(f.total)}</span></button>`).join("")}</div>`;
+      const diretos = base.filter((p) => caminhoDe(p).length === st.caminho.length).length;
+      if (diretos && st.modo === "prop") html += `<div class="note">${fmt(diretos)} peça${diretos === 1 ? " fica" : "s ficam"} direto em "${esc(titulo)}": o sistema delas tem menos de 10 peças neste modelo, então não ganhou subcategoria.</div>`;
+    }
+
+    if (!comoCartoes && st.caminho.length) {
+      const contaAcao = (a) => base.filter((p) => p.ac === a).length;
+      const filtros = [["todos", "Todos", base.length], ...Object.keys(ACOES).map((a) => [a, ACOES[a].curto, contaAcao(a)]).filter((x) => x[2] > 0)];
+      if (!filtros.some((f) => f[0] === st.filtro)) st.filtro = "todos";
+      html += `<div class="toolbar"><div class="chips" role="group" aria-label="Filtrar por ação">${filtros.map(([k, rot, n]) => `<button type="button" class="chip" data-filtro="${k}" aria-pressed="${st.filtro === k}">${esc(rot)} <span class="n">${fmt(n)}</span></button>`).join("")}</div><input type="search" id="busca" placeholder="Buscar peça ou código" value="${esc(st.busca)}" aria-label="Buscar peça ou código"></div>`;
+      const q = norm(st.busca);
+      const lista = base.filter((p) => (st.filtro === "todos" || p.ac === st.filtro) && (!q || norm(p.n).includes(q) || norm(p.c).includes(q)));
+      if (!lista.length) html += `<div class="empty">Nenhuma peça com esse filtro.</div>`;
+      else {
+        html += `<div class="grid">${lista.slice(0, st.limite).map((p) => card(p)).join("")}</div>`;
+        if (lista.length > st.limite) html += `<button type="button" class="more" id="mais">Mostrar mais ${fmt(Math.min(48, lista.length - st.limite))} de ${fmt(lista.length - st.limite)}</button>`;
+      }
+    }
+    el.innerHTML = html;
+    const b = document.getElementById("busca");
+    if (b) b.addEventListener("input", (e) => { st.busca = e.target.value; st.limite = 48; const pos = e.target.selectionStart; renderPagina(); const nb = document.getElementById("busca"); nb.focus(); try { nb.setSelectionRange(pos, pos); } catch (er) { /* ignora */ } });
+  }
+  function card(p) {
+    const a = ACOES[p.ac];
+    return `<button type="button" class="card" data-prod="${esc(p.c)}"><span class="code">${esc(p.c)}</span><span class="nm">${esc(p.n)}</span><span class="foot"><span class="badge b-${p.ac}">${esc(a ? a.curto : p.ac)}</span>${p.s ? `<span class="badge b-sis">${esc(p.s)}</span>` : ""}${p.a ? "" : `<span class="badge b-inativo">Inativo</span>`}</span></button>`;
+  }
+
+  // ---------- Ficha do produto ----------
+  function slug(s) { return norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
+  function abrirProduto(codigo) {
+    const m = marca();
+    const p = m.produtos.find((x) => x.c === codigo);
+    if (!p) return;
+    const a = ACOES[p.ac];
+    const dup = m.duplicados.find((d) => d.copia.c === p.c);
+    let jsonld = "";
+    if (p.dp) {
+      const itens = [{ "@type": "ListItem", position: 1, name: "Início", item: "/" }];
+      p.dp.forEach((n, i) => itens.push({ "@type": "ListItem", position: i + 2, name: n, item: "/" + slug(p.dp.slice(0, i + 1).join(" ")) }));
+      itens.push({ "@type": "ListItem", position: p.dp.length + 2, name: p.n });
+      jsonld = JSON.stringify({ "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: itens }, null, 2);
+    }
+    let html = `<button type="button" class="close" id="fechar">Fechar</button>`;
+    html += `<div><span class="badge b-${p.ac}">${esc(a ? a.rot : p.ac)}</span> ${p.a ? "" : `<span class="badge b-inativo">Inativo</span>`}</div>`;
+    html += `<h3>${esc(p.n)}</h3>`;
+    html += `<dl class="kv"><dt>Código</dt><dd style="font-family:var(--f-mono)">${esc(p.c)}</dd><dt>Sistema</dt><dd>${esc(p.s || "—")}</dd></dl>`;
+    html += `<div class="box hoje"><span class="lbl">Breadcrumb hoje no site</span><nav class="crumbs">${crumbs(p.an, false)}<span class="sep">›</span><span>${esc(p.n)}</span></nav></div>`;
+    html += `<div class="box prop"><span class="lbl">Breadcrumb proposto</span>${p.dp ? `<nav class="crumbs">${crumbs(p.dp, false)}<span class="sep">›</span><span>${esc(p.n)}</span></nav>` : `<span>Sem categoria até a loja definir o modelo.</span>`}</div>`;
+    if (p.o) html += `<div class="note ${p.ac === "REVISAR_SEM_MODELO" ? "bad" : ""}">${esc(p.o)}</div>`;
+    if (dup) {
+      const lado = (t, x) => `<div class="box"><span class="lbl">${t}</span><dl class="kv"><dt>Código</dt><dd style="font-family:var(--f-mono)">${esc(x.c)}</dd><dt>Nome</dt><dd>${esc(x.n)}</dd><dt>Ativo</dt><dd>${x.a ? "sim" : "não"}</dd><dt>Categoria</dt><dd>${esc(x.cat)}</dd><dt>Lançamento</dt><dd>${esc(x.lan || "sem data")}</dd></dl></div>`;
+      html += `<div class="pair">${lado("Esta cópia", dup.copia)}${lado("Original na árvore", dup.original)}</div><div class="note">${esc(dup.sugestao)}</div>`;
+    }
+    if (p.sec) html += `<div class="box"><span class="lbl">Categorias atuais (ficam como secundárias)</span><span>${esc(p.sec)}</span></div>`;
+    if (jsonld) html += `<div class="box"><span class="lbl">Como o Google lê o breadcrumb proposto (URLs ilustrativas)</span><pre class="code">${esc(jsonld)}</pre></div>`;
+    const d = document.getElementById("drawer");
+    d.innerHTML = html;
+    d.hidden = false;
+    document.getElementById("drawer-bg").hidden = false;
+    document.getElementById("fechar").focus();
+  }
+  function fecharProduto() { document.getElementById("drawer").hidden = true; document.getElementById("drawer-bg").hidden = true; }
+
+  // ---------- Pendências ----------
+  function renderPend() {
+    const m = marca();
+    const dup = m.duplicados;
+    const rev = m.produtos.filter((p) => p.ac === "REVISAR_SEM_MODELO");
+    const dec = m.mudancas.filter((x) => ["FUNDIR", "MANTER_SEPARADO", "REVISAR_FUSAO"].includes(x.ac));
+    const abas = [["dup", `Duplicados (${dup.length})`], ["rev", `Sem modelo (${rev.length})`], ["dec", `Decisões de modelo (${dec.length})`]];
+    let html = `<div class="chips" role="group" aria-label="Tipo de pendência" style="padding-block:4px 12px">${abas.map(([k, t]) => `<button type="button" class="chip" data-pend="${k}" aria-pressed="${st.pend === k}">${esc(t)}</button>`).join("")}</div>`;
+    if (st.pend === "dup") {
+      html += `<p>Mesma peça cadastrada duas vezes: a cópia tem o código sem o zero à esquerda, nome curto e só a categoria Mercado Livre. Antes de desativar, conferir no admin estoque, preço e se há anúncio no Mercado Livre ligado à cópia.</p>`;
+      html += dup.length ? `<div class="table-wrap"><table><thead><tr><th>Situação</th><th>Cópia</th><th>Nome da cópia</th><th>Original</th><th>Nome do original</th><th>Ativos</th></tr></thead><tbody>${dup.map((d) => `<tr class="clk" data-prod="${esc(d.copia.c)}"><td><span class="badge b-DUPLICADO">${esc(d.situacao.replace(/_/g, " ").toLowerCase())}</span></td><td class="mono">${esc(d.copia.c)}</td><td>${esc(d.copia.n)}</td><td class="mono">${esc(d.original.c)}</td><td>${esc(d.original.n)}</td><td>${d.copia.a ? "cópia" : ""}${d.copia.a && d.original.a ? " + " : ""}${d.original.a ? "original" : ""}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">Nenhum duplicado nesta marca.</div>`;
+    } else if (st.pend === "rev") {
+      html += `<p>O nome não traz o modelo da moto. Quando os códigos vizinhos (mesma moto desmontada) são todos do mesmo modelo, a sugestão aparece ao lado.</p>`;
+      html += rev.length ? `<div class="table-wrap"><table><thead><tr><th>Código</th><th>Nome</th><th>Categoria hoje</th><th>Sugestão</th></tr></thead><tbody>${rev.map((p) => `<tr class="clk" data-prod="${esc(p.c)}"><td class="mono">${esc(p.c)}</td><td>${esc(p.n)}</td><td>${esc(p.an.join(" › "))}</td><td>${esc(p.o)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">Nenhum produto sem modelo.</div>`;
+    } else {
+      html += `<p>Modelos com nomes diferentes que podem ser a mesma moto. A referência é a tabela FIPE.</p>`;
+      html += dec.length ? `<div class="table-wrap"><table><thead><tr><th>Decisão</th><th>Modelo</th><th>Vai para</th><th class="num">Peças</th><th>Motivo</th></tr></thead><tbody>${dec.map((x) => `<tr><td><span class="badge ${x.ac === "REVISAR_FUSAO" ? "b-REVISAR_SEM_MODELO" : "b-AJUSTAR_PRINCIPAL"}">${esc(x.ac === "FUNDIR" ? "Fundir" : x.ac === "MANTER_SEPARADO" ? "Manter separado" : "Confirmar")}</span></td><td>${esc(x.at)}</td><td>${esc(x.nv)}</td><td class="num">${esc(x.n)}</td><td>${esc(x.m)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">Nenhuma decisão de modelo pendente.</div>`;
+    }
+    document.getElementById("view-pend").innerHTML = html;
+  }
+
+  // ---------- Mudanças ----------
+  function renderMud() {
+    const m = marca();
+    const NOMES = { MANTER: "Manter", MANTER_SEM_PRODUTOS: "Manter sem peças", CRIAR: "Criar", FUNDIR: "Fundir", MANTER_SEPARADO: "Manter separado", DESATIVAR: "Desativar", DESATIVAR_APOS_MIGRACAO: "Desativar após migrar", REVISAR_FUSAO: "Confirmar fusão" };
+    const cont = {};
+    for (const x of m.mudancas) cont[x.ac] = (cont[x.ac] || 0) + 1;
+    let html = `<p>O que muda na árvore de categorias da marca para chegar à proposta. Categoria de modelo nenhuma é apagada; os grupos genéricos saem só depois que as peças forem movidas.</p>`;
+    html += `<div class="chips" style="padding-block:0 12px">${Object.keys(cont).map((k) => `<span class="chip">${esc(NOMES[k] || k)} <span class="n">${fmt(cont[k])}</span></span>`).join("")}</div>`;
+    html += `<div class="table-wrap"><table><thead><tr><th>Ação</th><th>Categoria hoje</th><th>Categoria proposta</th><th class="num">Peças</th><th>Motivo</th></tr></thead><tbody>${m.mudancas.map((x) => `<tr><td>${esc(NOMES[x.ac] || x.ac)}</td><td>${esc(x.at)}</td><td>${esc(x.nv)}</td><td class="num">${esc(x.n)}</td><td>${esc(x.m)}</td></tr>`).join("")}</tbody></table></div>`;
+    document.getElementById("view-mud").innerHTML = html;
+  }
+
+  // ---------- Controle ----------
+  function renderTudo() {
+    document.getElementById("btn-hoje").setAttribute("aria-pressed", st.modo === "hoje");
+    document.getElementById("btn-prop").setAttribute("aria-pressed", st.modo === "prop");
+    for (const [id, v] of [["tab-navegar", "navegar"], ["tab-pend", "pend"], ["tab-mud", "mud"]]) document.getElementById(id).setAttribute("aria-selected", st.aba === v);
+    document.getElementById("view-navegar").hidden = st.aba !== "navegar";
+    document.getElementById("view-pend").hidden = st.aba !== "pend";
+    document.getElementById("view-mud").hidden = st.aba !== "mud";
+    renderStats();
+    if (st.aba === "navegar") { renderMenu(); renderPagina(); }
+    if (st.aba === "pend") renderPend();
+    if (st.aba === "mud") renderMud();
+  }
+  const sel = document.getElementById("sel-marca");
+  sel.innerHTML = D.marcas.map((m, i) => `<option value="${i}">${esc(m.nome)} (${fmt(m.produtos.length)})</option>`).join("");
+  sel.value = String(st.marca);
+  sel.addEventListener("change", () => { st.marca = Number(sel.value); st.caminho = []; st.abertos.clear(); st.filtro = "todos"; st.busca = ""; salvar(); renderTudo(); });
+  document.getElementById("btn-hoje").addEventListener("click", () => { st.modo = "hoje"; st.caminho = []; st.abertos.clear(); salvar(); renderTudo(); });
+  document.getElementById("btn-prop").addEventListener("click", () => { st.modo = "prop"; st.caminho = []; st.abertos.clear(); salvar(); renderTudo(); });
+  document.getElementById("tab-navegar").addEventListener("click", () => { st.aba = "navegar"; renderTudo(); });
+  document.getElementById("tab-pend").addEventListener("click", () => { st.aba = "pend"; renderTudo(); });
+  document.getElementById("tab-mud").addEventListener("click", () => { st.aba = "mud"; renderTudo(); });
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-cam],[data-tw],[data-filtro],[data-prod],[data-pend],#mais,#fechar,#drawer-bg");
+    if (!t) return;
+    if (t.id === "fechar" || t.id === "drawer-bg") return fecharProduto();
+    if (t.id === "mais") { st.limite += 48; return renderPagina(); }
+    if (t.dataset.tw) { const k = t.dataset.tw; st.abertos.has(k) ? st.abertos.delete(k) : st.abertos.add(k); return renderMenu(); }
+    if (t.dataset.cam) { st.caminho = JSON.parse(t.dataset.cam); st.abertos.add(t.dataset.cam); st.filtro = "todos"; st.busca = ""; st.limite = 48; renderMenu(); renderPagina(); document.getElementById("pagina").scrollIntoView({ block: "start", behavior: "auto" }); return; }
+    if (t.dataset.filtro) { st.filtro = t.dataset.filtro; st.limite = 48; return renderPagina(); }
+    if (t.dataset.pend) { st.pend = t.dataset.pend; return renderPend(); }
+    if (t.dataset.prod) return abrirProduto(t.dataset.prod);
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") fecharProduto(); });
+  document.getElementById("subtitulo").textContent = `Marca › Modelo › Sistema · dados de ${D.geradoEm} · somente leitura`;
+  renderTudo();
+})();
+</script>

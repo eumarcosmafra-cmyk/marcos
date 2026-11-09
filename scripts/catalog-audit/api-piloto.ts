@@ -15,45 +15,11 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { parseArgs } from "node:util"
 import type { CategoriaMagazord, ProdutoMagazord } from "./magazord"
+import { lerCsv } from "./csv"
 import { MARCAS_SLUG, limparModelo, tokenizar } from "./taxonomy"
 
 const CATEGORIA_TECNICA = 10095
 const SEM_SISTEMA = "Não classificado"
-
-/** Parser de CSV com ; e aspas (formato das planilhas geradas e da exportação Magazord). */
-function lerCsv(texto: string): Record<string, string>[] {
-  const linhas: string[][] = []
-  let campo = ""
-  let linha: string[] = []
-  let aspas = false
-  const t = texto.replace(/^﻿/, "")
-  for (let i = 0; i < t.length; i++) {
-    const c = t[i]
-    if (aspas) {
-      if (c === '"' && t[i + 1] === '"') {
-        campo += '"'
-        i++
-      } else if (c === '"') aspas = false
-      else campo += c
-    } else if (c === '"') aspas = true
-    else if (c === ";") {
-      linha.push(campo)
-      campo = ""
-    } else if (c === "\n" || c === "\r") {
-      if (c === "\r" && t[i + 1] === "\n") i++
-      linha.push(campo)
-      linhas.push(linha)
-      linha = []
-      campo = ""
-    } else campo += c
-  }
-  if (campo || linha.length) {
-    linha.push(campo)
-    linhas.push(linha)
-  }
-  const [cab, ...resto] = linhas
-  return resto.filter((l) => l.some((x) => x !== "")).map((l) => Object.fromEntries(cab.map((k, i) => [k, l[i] ?? ""])))
-}
 
 /** Mesmo estilo da exportação Magazord: UTF-8 sem BOM, LF, aspas só quando há espaço, ; ou aspas. */
 function csvMagazord(linhas: string[][]): string {
