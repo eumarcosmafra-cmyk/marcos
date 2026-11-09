@@ -19,6 +19,7 @@
     "audit:gsc": "tsx scripts/catalog-audit/gsc-analise.ts",
     "audit:gsc-extrair": "tsx scripts/catalog-audit/gsc-extrair.ts",
     "audit:gsc-inspecao": "tsx scripts/catalog-audit/gsc-inspecao.ts",
+    "audit:gsc-comparar": "tsx scripts/catalog-audit/gsc-comparar.ts",
     "audit:catalogo:test": "tsx scripts/catalog-audit/selftest.ts",
     "audit:catalogo:typecheck": "tsc -p scripts/catalog-audit/tsconfig.json"
   },
