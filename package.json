@@ -14,6 +14,7 @@
     "audit:depara": "tsx scripts/catalog-audit/api-depara.ts",
     "audit:taxonomia": "tsx scripts/catalog-audit/api-taxonomia.ts",
     "audit:piloto": "tsx scripts/catalog-audit/api-piloto.ts",
+    "audit:consolidar": "tsx scripts/catalog-audit/consolidar.ts",
     "audit:duplicados": "tsx scripts/catalog-audit/api-duplicados.ts",
     "audit:simulador": "tsx scripts/catalog-audit/simulador.ts",
     "audit:gsc": "tsx scripts/catalog-audit/gsc-analise.ts",
