@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { parseArgs } from "node:util"
 import { lerCsv } from "./csv"
-import { MARCAS_SLUG, classificarSistema, limparModelo, tokenizar } from "./taxonomy"
+import { MARCAS_SLUG, aprenderDicionario, classificarComMarca, classificarSemMarca, classificarSistema, detectarMarca, limparModelo, tokenizar } from "./taxonomy"
 
 const num = (s: string) => Number(String(s ?? "").replace(/%/g, "").replace(",", ".")) || 0
 const fmt = (n: number) => Math.round(n).toLocaleString("pt-BR")
@@ -212,7 +212,7 @@ function main(): void {
 
   // ---------- Resumo ----------
   const md: string[] = []
-  md.push("# GSC × taxonomia", "", `Fonte: exportação da interface do GSC (1.000 principais consultas e 1.000 principais páginas). As consultas somam ${fmt(totC)} cliques e as páginas ${fmt(totPC)} cliques.`, "")
+  md.push("# GSC × taxonomia", "", `Fonte: ${fmt(consultas.length)} consultas (${fmt(totC)} cliques) e ${fmt(paginas.length)} páginas (${fmt(totPC)} cliques).`, "")
   md.push("## Consultas por intenção", "", "| Tipo | Consultas | Cliques | % cliques | Impressões | % impr. |", "|---|---|---|---|---|---|")
   for (const [k, v] of Array.from(porTipo.entries()).sort((a, b) => b[1].i - a[1].i)) md.push(`| ${k} | ${fmt(v.n)} | ${fmt(v.c)} | ${pct(v.c, totC)} | ${fmt(v.i)} | ${pct(v.i, totI)} |`)
   md.push("", "## Peça + modelo: por sistema", "", "| Sistema | Consultas | Cliques | Impressões |", "|---|---|---|---|")
@@ -231,7 +231,75 @@ function main(): void {
   md.push("", `URLs com "//" entre as 1.000 páginas: ${fmt(dupla.length)} (${fmt(dupla.reduce((a, p) => a + p.cliques, 0))} cliques). URLs com parâmetro: ${fmt(pagsC.filter((p) => p.params).length)}.`, "")
   md.push("### Páginas de categoria (públicas) com desempenho", "", "| URL | Tipo | Cliques | Impressões | Posição |", "|---|---|---|---|---|")
   for (const p of pagsC.filter((x) => /PÁGINA|VER TODOS/.test(x.tipo)).sort((a, b) => b.imp - a.imp).slice(0, 40)) md.push(`| /${p.slug} | ${p.tipo} | ${fmt(p.cliques)} | ${fmt(p.imp)} | ${p.pos} |`)
-  md.push("", "## Limitações", "", "- Exportação da interface: só as 1.000 principais consultas e páginas, sem a combinação consulta × página.", `- As 1.000 consultas cobrem uma parte pequena dos cliques: a busca da loja é pulverizada em cauda longa.`, "- Classificação por dicionário (modelos da árvore e do catálogo, tipos de peça do catálogo); revisar casos isolados em `consultas-classificadas.csv`.", "")
+  // ---------- Demanda pela página de produto (100% dos cliques, sem anonimização) ----------
+  const arqClass = join("output", "catalog-audit", "classificacao", "classificacao-produtos.csv")
+  if (existsSync(arqClass)) {
+    const porSlug = new Map<string, { marca: string; modelo: string; sistema: string }>()
+    for (const r of lerCsv(readFileSync(arqClass, "utf-8"))) {
+      const slug = r.url.replace(/^https?:\/\/[^/]+\/+/, "").replace(/\/+$/, "")
+      porSlug.set(slug, { marca: r.marca, modelo: r.modelo_agrupado || r.modelo_bruto, sistema: r.sistema })
+    }
+    const { modelos: dicMod, familias } = aprenderDicionario(Array.from(porSlug.keys()))
+    const classe = (slug: string) => {
+      const c = porSlug.get(slug)
+      if (c) return c
+      const t = tokenizar(slug)
+      const m = detectarMarca(t)
+      const x = m ? classificarComMarca(slug, t, m) : classificarSemMarca(slug, t, dicMod, familias)
+      return { marca: x.marca ?? "", modelo: x.modelo ?? "", sistema: x.sistema }
+    }
+    const prods = pagsC.filter((p) => p.tipo.startsWith("PRODUTO"))
+    const aggr = (chave: (c: { marca: string; modelo: string; sistema: string }) => string) => {
+      const m = new Map<string, { c: number; i: number; n: number }>()
+      for (const p of prods) {
+        const k = chave(classe(p.slug))
+        const v = m.get(k) ?? { c: 0, i: 0, n: 0 }
+        v.c += p.cliques; v.i += p.imp; v.n++
+        m.set(k, v)
+      }
+      return Array.from(m.entries()).sort((a, b) => b[1].c - a[1].c || b[1].i - a[1].i)
+    }
+    const totProdC = prods.reduce((a, p) => a + p.cliques, 0)
+    const totProdI = prods.reduce((a, p) => a + p.imp, 0)
+    const comClique = prods.filter((p) => p.cliques > 0).length
+    md.push("", "## Demanda medida pelas páginas de produto", "", `${fmt(prods.length)} páginas de produto com impressão (${fmt(comClique)} com pelo menos 1 clique), somando ${fmt(totProdC)} cliques e ${fmt(totProdI)} impressões. Produtos no sitemap: ${fmt(produtosSitemap.size)}.`, "")
+    md.push("### Por marca", "", "| Marca | Páginas | Cliques | % | Impressões |", "|---|---|---|---|---|")
+    for (const [k, v] of aggr((c) => c.marca || "(sem marca)").slice(0, 15)) md.push(`| ${k} | ${fmt(v.n)} | ${fmt(v.c)} | ${pct(v.c, totProdC)} | ${fmt(v.i)} |`)
+    md.push("", "### Por sistema", "", "| Sistema | Páginas | Cliques | % | Impressões | Cliques por página |", "|---|---|---|---|---|---|")
+    for (const [k, v] of aggr((c) => c.sistema || "Não classificado")) md.push(`| ${k} | ${fmt(v.n)} | ${fmt(v.c)} | ${pct(v.c, totProdC)} | ${fmt(v.i)} | ${(v.c / (v.n || 1)).toFixed(2).replace(".", ",")} |`)
+    md.push("", "### Top 40 modelos (cliques nas páginas de produto)", "", "| Marca | Modelo | Páginas | Cliques | Impressões | Página pública do modelo |", "|---|---|---|---|---|---|")
+    for (const [k, v] of aggr((c) => `${c.marca}\u0001${c.modelo || "(sem modelo)"}`).slice(0, 40)) {
+      const [marca, modelo] = k.split("\u0001")
+      const s2 = slugDe(modelo)
+      md.push(`| ${marca} | ${modelo.toUpperCase()} | ${fmt(v.n)} | ${fmt(v.c)} | ${fmt(v.i)} | ${catsPublicas.has(s2) ? `/${s2}` : "—"} |`)
+    }
+    writeFileSync(join(saida, "demanda-modelo-sistema.csv"), csvExcel([["marca", "modelo", "sistema", "paginas", "cliques", "impressoes"], ...aggr((c) => `${c.marca}\u0001${c.modelo}\u0001${c.sistema}`).map(([k, v]) => [...k.split("\u0001"), v.n, v.c, v.i])]))
+  }
+
+  // ---------- Consulta × página: que tipo de página atende cada intenção ----------
+  const arqQP = join(values.dir, "consulta-pagina.csv")
+  if (existsSync(arqQP)) {
+    const tipoConsulta = new Map(classif.map((c) => [c.q, c.tipo]))
+    const tipoPag = new Map(pagsC.map((p) => [p.url, p.tipo]))
+    const m = new Map<string, Map<string, { c: number; i: number }>>()
+    for (const r of lerCsv(readFileSync(arqQP, "utf-8"), ",")) {
+      const tq = tipoConsulta.get(r.Consulta)
+      if (!tq) continue
+      const tp = tipoPag.get(r["Página"]) ?? tipoPagina(r["Página"]).tipo
+      const porP = m.get(tq) ?? new Map<string, { c: number; i: number }>()
+      const v = porP.get(tp) ?? { c: 0, i: 0 }
+      v.c += num(r.Cliques); v.i += num(r["Impressões"])
+      porP.set(tp, v)
+      m.set(tq, porP)
+    }
+    md.push("", "## Que página o Google mostra para cada intenção (consulta × página)", "", "| Intenção | Página de destino | Cliques | % da intenção | Impressões |", "|---|---|---|---|---|")
+    for (const [tq, porP] of m) {
+      const tot = Array.from(porP.values()).reduce((a, v) => a + v.c, 0)
+      for (const [tp, v] of Array.from(porP.entries()).sort((a, b) => b[1].c - a[1].c).slice(0, 3)) md.push(`| ${tq} | ${tp} | ${fmt(v.c)} | ${pct(v.c, tot)} | ${fmt(v.i)} |`)
+    }
+  }
+
+  md.push("", "## Limitações", "", "- Consultas: o Google anonimiza a maior parte da cauda longa; a demanda completa está na seção por páginas de produto.", "- Classificação por dicionário (modelos da árvore e do catálogo, tipos de peça do catálogo); revisar casos isolados em `consultas-classificadas.csv`.", "")
   writeFileSync(join(saida, "resumo-gsc.md"), md.join("\n"))
   console.log(`[gsc] ${consultas.length} consultas e ${paginas.length} páginas -> ${saida}`)
 }
