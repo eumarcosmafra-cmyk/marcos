@@ -57,7 +57,8 @@ function main(): void {
   const saida = join("output", "catalog-audit", "piloto", marcaAlvo.replace(/\s+/g, "-"))
   mkdirSync(saida, { recursive: true })
 
-  const categorias = JSON.parse(readFileSync(join(dir, "categorias.json"), "utf-8")) as CategoriaMagazord[]
+  // Nomes com espaço não separável (\u00a0) ou espaços repetidos no cadastro: normaliza para casar com decisões e modelos
+  const categorias = (JSON.parse(readFileSync(join(dir, "categorias.json"), "utf-8")) as CategoriaMagazord[]).map((c) => ({ ...c, nome: c.nome.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim() }))
   const porId = new Map(categorias.map((c) => [c.id, c]))
   const caminho = (id: number): CategoriaMagazord[] => {
     const out: CategoriaMagazord[] = []
@@ -268,7 +269,7 @@ function main(): void {
   // modelos atuais sem produtos que parecem versão curta de um modelo final ("DY150-9" × "DY150-9 SUPER GIANT")
   for (const m of modelosAtuais) {
     const a = m.nome.trim()
-    if (finais.includes(a)) continue
+    if (finais.includes(a) || fusoesManuais.has(a) || (canonico.get(a) ?? a) !== a) continue
     for (const b of finais) if (b.split(/\s+/)[0] === a && b !== a) revisarFusao.push([a, b])
   }
 
