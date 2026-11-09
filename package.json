@@ -16,6 +16,7 @@
     "audit:piloto": "tsx scripts/catalog-audit/api-piloto.ts",
     "audit:duplicados": "tsx scripts/catalog-audit/api-duplicados.ts",
     "audit:simulador": "tsx scripts/catalog-audit/simulador.ts",
+    "audit:gsc": "tsx scripts/catalog-audit/gsc-analise.ts",
     "audit:catalogo:test": "tsx scripts/catalog-audit/selftest.ts",
     "audit:catalogo:typecheck": "tsc -p scripts/catalog-audit/tsconfig.json"
   },

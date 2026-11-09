@@ -1,5 +1,5 @@
-/** Parser de CSV com ; e aspas (formato das planilhas geradas e da exportação Magazord). */
-export function lerCsv(texto: string): Record<string, string>[] {
+/** Parser de CSV com aspas. Padrão ";" (planilhas geradas e exportação Magazord); use "," para exportações do GSC. */
+export function lerCsv(texto: string, sep = ";"): Record<string, string>[] {
   const linhas: string[][] = []
   let campo = ""
   let linha: string[] = []
@@ -14,7 +14,7 @@ export function lerCsv(texto: string): Record<string, string>[] {
       } else if (c === '"') aspas = false
       else campo += c
     } else if (c === '"') aspas = true
-    else if (c === ";") {
+    else if (c === sep) {
       linha.push(campo)
       campo = ""
     } else if (c === "\n" || c === "\r") {
