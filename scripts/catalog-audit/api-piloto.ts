@@ -37,6 +37,12 @@ const fmt = (n: number) => n.toLocaleString("pt-BR")
 const norm = (s: string) => tokenizar(s).join(" ")
 /** Chave compacta de modelo: sem espaços/hífens e sem o que está entre parênteses ("DY150ZH (TRICICLO CARGA)" = "DY 150 ZH"). */
 const compacta = (s: string) => tokenizar(s.replace(/\([^)]*\)/g, " ")).join("")
+/** Chave independente da ordem e da separação: "GL 1800 GOLD WING" = "GOLD WING GL1800", "CBR 1000RR" = "CBR 1000 RR". */
+const chaveFusao = (s: string) =>
+  tokenizar(s.replace(/\([^)]*\)/g, " "))
+    .flatMap((t) => t.match(/[a-z]+|\d+/g) ?? [])
+    .sort()
+    .join("|")
 const TRIM = /\s+(ABS|SE|DLX)$/i
 
 function main(): void {
@@ -87,7 +93,13 @@ function main(): void {
     return Array.from(ids.entries()).sort((a, b) => b[1] - a[1])[0]?.[0]
   })()
   const raiz = raizPorNome ?? (raizPorProposta !== undefined ? porId.get(raizPorProposta) : undefined)
-  const nomeRaiz = raiz ? raiz.nome.trim() : values.marca.toUpperCase()
+  // Nome da raiz = marca como está no cadastro de marcas da loja (ex.: HONDA). Se a raiz atual tem outro nome
+  // (ex.: "BIZ 125 EX" para a Honda), a árvore sai com o nome da marca e a renomeação vai para mudancas-*.csv.
+  const marcasBrutas = JSON.parse(readFileSync(join(dir, "marcas.json"), "utf-8")) as { id: number; nome: string }[]
+  const nomeMarcaLoja = marcasBrutas.find((m) => norm(m.nome) === marcaAlvo)?.nome.trim()
+  const nomeRaizAtual = raiz ? raiz.nome.trim() : null
+  const nomeRaiz = nomeMarcaLoja ?? nomeRaizAtual ?? values.marca.toUpperCase()
+  const atualRaiz = nomeRaizAtual ?? nomeRaiz
 
   // Conferência com a exportação Magazord (nomes exatos usados pela plataforma)
   const exportacao = values.export ? lerCsv(readFileSync(values.export, "utf-8")) : []
@@ -176,7 +188,7 @@ function main(): void {
   const grupos = new Map<string, string[]>()
   for (const n of nomesConhecidos) {
     const base = n.replace(TRIM, "")
-    const chave = compacta(base)
+    const chave = chaveFusao(base)
     grupos.set(chave, [...(grupos.get(chave) ?? []), n])
   }
   for (const nomes of grupos.values()) {
@@ -247,7 +259,9 @@ function main(): void {
       const pb = b.split(/\s+/)
       const prefixo = pa.length < pb.length && pa.every((x, i) => x === pb[i])
       const sa = assinatura(a)
-      const mesmaAssinatura = sa.length >= 4 && assinatura(b).startsWith(sa) && compacta(b) !== compacta(a) && !prefixo && !compacta(b).startsWith(compacta(a))
+      // Só quando um dos nomes começa por número ("125 T 10 SPACE" × "DY125T-10"); evita "CB 1000" × "CBR 1000 RR"
+      const comecaComNumero = /^\d/.test(a) || /^\d/.test(b)
+      const mesmaAssinatura = comecaComNumero && sa.length >= 4 && assinatura(b).startsWith(sa) && compacta(b) !== compacta(a) && !prefixo && !compacta(b).startsWith(compacta(a))
       if (prefixo || mesmaAssinatura) revisarFusao.push([a, b])
     }
   }
@@ -295,6 +309,9 @@ function main(): void {
       return tp.length >= 2 && tp.some((x) => /\d/.test(x)) && tp.every((x) => tm.has(x)) && !deOutroModelo.has(pub)
     }).sort((a, b) => b.length - a.length)[0]
     if (aprox) return { slug: aprox, tipo: "APROXIMADA" }
+    // Página da família do modelo ("/hornet" para HORNET 600, "/shadow" para SHADOW 600)
+    const familia = tokenizar(m)[0]
+    if (familia && /^[a-z]{4,}$/.test(familia) && publicas.has(familia) && !deOutroModelo.has(familia)) return { slug: familia, tipo: "FAMILIA" }
     return { slug: exato, tipo: "CRIAR" }
   }
   const slugMarca = publicas.has(slugify(nomeRaiz)) ? slugify(nomeRaiz) : null
@@ -347,32 +364,34 @@ function main(): void {
   const paginaDoModelo = new Map(modelosPaginas.map((x) => [x.modelo, x]))
 
   // 2) Mudanças na árvore atual
-  const mud: (string | number | null)[][] = [["acao", "categoria_atual", "categoria_nova", "produtos", "motivo"]]
+  const mud: (string | number | null)[][] = [["acao", "categoria_atual", "categoria_nova", "produtos", "motivo", "id_categoria_atual"]]
+  if (!raiz) mud.push(["CRIAR", null, nomeRaiz, linhas.length, "Marca com produtos e sem raiz na árvore", null])
+  else if (nomeRaizAtual !== nomeRaiz) mud.push(["RENOMEAR_RAIZ", nomeRaizAtual, nomeRaiz, linhas.length, "Raiz com nome de modelo (ou grafia diferente): passa a ter o nome da marca", raiz.id])
   const usadosAtuais = new Set(linhas.map((l) => l.modelo))
   for (const m of modelosAtuais) {
     const nome = m.nome.trim()
     const destinoNome = canonico.get(nome) ?? nome
     const n = linhas.filter((l) => l.modelo === destinoNome).length
-    if (norm(nome) === marcaAlvo) mud.push(["DESATIVAR", `${nomeRaiz} > ${nome}`, null, 0, "Modelo com o nome da própria marca"])
+    if (norm(nome) === marcaAlvo) mud.push(["DESATIVAR", `${atualRaiz} > ${nome}`, null, 0, "Modelo com o nome da própria marca", m.id])
     else if (destinoNome !== nome) {
       const manual = fusoesManuais.get(nome)
       const motivo = manual ? `Fusão confirmada (nome canônico FIPE)${manual.obs ? `: ${manual.obs}` : ""}` : "Mesmo modelo: variação de grafia ou de equipamento (regra 1)"
-      mud.push(["FUNDIR", `${nomeRaiz} > ${nome}`, `${nomeRaiz} > ${destinoNome}`, linhas.filter((l) => l.modeloOriginal === nome).length, motivo])
+      mud.push(["FUNDIR", `${atualRaiz} > ${nome}`, `${nomeRaiz} > ${destinoNome}`, linhas.filter((l) => l.modeloOriginal === nome).length, motivo, m.id])
     }
-    else if (!usadosAtuais.has(nome)) mud.push(["MANTER_SEM_PRODUTOS", `${nomeRaiz} > ${nome}`, `${nomeRaiz} > ${nome}`, 0, "Sem produto hoje; mantida para novas entradas do desmanche (pode ficar oculta no menu)"])
-    else mud.push(["MANTER", `${nomeRaiz} > ${nome}`, `${nomeRaiz} > ${nome}`, n, ""])
+    else if (!usadosAtuais.has(nome)) mud.push(["MANTER_SEM_PRODUTOS", `${atualRaiz} > ${nome}`, `${nomeRaiz} > ${nome}`, 0, "Sem produto hoje; mantida para novas entradas do desmanche (pode ficar oculta no menu)", m.id])
+    else mud.push(["MANTER", `${atualRaiz} > ${nome}`, `${nomeRaiz} > ${nome}`, n, "", m.id])
   }
-  for (const m of modelosFinais) if (!modelosAtuais.some((x) => x.nome.trim() === m)) mud.push(["CRIAR", null, `${nomeRaiz} > ${m}`, linhas.filter((l) => l.modelo === m).length, "Modelo com produtos e sem categoria"])
+  for (const m of modelosFinais) if (!modelosAtuais.some((x) => x.nome.trim() === m)) mud.push(["CRIAR", null, `${nomeRaiz} > ${m}`, linhas.filter((l) => l.modelo === m).length, "Modelo com produtos e sem categoria", null])
   const ligadosHoje = (id: number) => linhas.filter((l) => l.p.categorias.includes(id)).length
-  for (const id of nivel3) mud.push(["DESATIVAR_APOS_MIGRACAO", nomeCaminho(id), null, ligadosHoje(id), "Grupo genérico do 3º nível: desativar só depois que os produtos ligados a ele estiverem na estrutura nova (não tem URL pública)"])
-  for (const r of arvore.slice(2)) if (r[1].includes(" > ")) mud.push(["CRIAR", null, `${r[1]} > ${r[0]}`, volNo.get(`${r[1].split(" > ")[1]}|${r[0]}`) ?? null, `Subcategoria de sistema (≥ ${corte} produtos)`])
+  for (const id of nivel3) mud.push(["DESATIVAR_APOS_MIGRACAO", nomeCaminho(id), null, ligadosHoje(id), "Grupo genérico do 3º nível: desativar só depois que os produtos ligados a ele estiverem na estrutura nova (não tem URL pública)", id])
+  for (const r of arvore.slice(2)) if (r[1].includes(" > ")) mud.push(["CRIAR", null, `${r[1]} > ${r[0]}`, volNo.get(`${r[1].split(" > ")[1]}|${r[0]}`) ?? null, `Subcategoria de sistema (≥ ${corte} produtos)`, null])
   for (const [a, b] of revisarFusao) {
     if (manterSeparado.has(b)) continue
-    mud.push(["REVISAR_FUSAO", `${nomeRaiz} > ${b}`, `${nomeRaiz} > ${a}`, volumeModelo.get(b) ?? null, "Nome contém outro modelo: confirmar se é a mesma moto"])
+    mud.push(["REVISAR_FUSAO", `${nomeRaiz} > ${b}`, `${nomeRaiz} > ${a}`, volumeModelo.get(b) ?? null, "Nome contém outro modelo: confirmar se é a mesma moto", modelosAtuais.find((x) => x.nome.trim() === b)?.id ?? null])
   }
-  for (const [m, obs] of manterSeparado) mud.push(["MANTER_SEPARADO", `${nomeRaiz} > ${m}`, `${nomeRaiz} > ${m}`, linhas.filter((l) => l.modelo === m).length, `Decisão: não fundir${obs ? `. ${obs}` : ""}`])
-  if (raiz && !caminhosExport.size) mud.push(["INFO", null, null, null, "Exportação Magazord não informada: nomes não conferidos"])
-  else if (raiz && !caminhosExport.has(nomeRaiz)) mud.push(["INFO", nomeRaiz, null, null, "Raiz não encontrada na exportação Magazord"])
+  for (const [m, obs] of manterSeparado) mud.push(["MANTER_SEPARADO", `${atualRaiz} > ${m}`, `${nomeRaiz} > ${m}`, linhas.filter((l) => l.modelo === m).length, `Decisão: não fundir${obs ? `. ${obs}` : ""}`, modelosAtuais.find((x) => x.nome.trim() === m)?.id ?? null])
+  if (raiz && !caminhosExport.size) mud.push(["INFO", null, null, null, "Exportação Magazord não informada: nomes não conferidos", null])
+  else if (raiz && nomeRaizAtual && !caminhosExport.has(nomeRaizAtual)) mud.push(["INFO", nomeRaizAtual, null, null, "Raiz não encontrada na exportação Magazord", raiz.id])
   writeFileSync(join(saida, `mudancas-${sufixo}.csv`), csvExcel(mud))
 
   // 3) Produtos
@@ -401,7 +420,7 @@ function main(): void {
   const md: string[] = []
   md.push(`# Piloto de recategorização: ${nomeRaiz}`, "", "Somente leitura. Nada foi alterado na loja.", "")
   md.push(`- Produtos da marca: ${fmt(linhas.length)} (ativos: ${fmt(linhas.filter((l) => l.p.ativo).length)})`)
-  md.push(`- Raiz atual: ${raiz ? `${nomeRaiz} (id ${raiz.id})` : "não existe: criar"}`)
+  md.push(`- Raiz atual: ${raiz ? `${nomeRaizAtual} (id ${raiz.id})${nomeRaizAtual !== nomeRaiz ? ` → renomear para ${nomeRaiz}` : ""}` : `não existe: criar "${nomeRaiz}"`}`)
   md.push(modoFiltro ? "- Sistema: filtro (característica do produto), não vira categoria. Árvore: Marca > Modelo" : `- Corte para subcategoria de sistema: ${corte} produtos`, "")
   md.push("## Produtos", "", "| Ação | Produtos | O que significa |", "|---|---|---|")
   const desc: Record<string, string> = {
@@ -416,7 +435,7 @@ function main(): void {
   for (const [a, n] of contMud) md.push(`| ${a} | ${fmt(n)} |`)
   md.push("", "### Modelos e páginas públicas (demanda dos últimos 6 meses no GSC)", "", `Página da marca: ${slugMarca ? `/${slugMarca} (existente)` : "criar"}.`, "", "| Modelo | Produtos | Página do modelo | Situação | Cliques nos produtos | Impressões nos produtos | Cliques na página do modelo |", "|---|---|---|---|---|---|---|")
   for (const x of [...modelosPaginas].sort((a, b) => b.cliquesProd - a.cliquesProd || b.produtos - a.produtos)) {
-    md.push(`| ${x.modelo} | ${fmt(x.produtos)} | /${x.slug} | ${x.tipo === "EXISTENTE" ? "existe" : x.tipo === "APROXIMADA" ? "existe (nome aproximado)" : x.produtos === 0 ? "sem produto hoje" : "criar"} | ${fmt(x.cliquesProd)} | ${fmt(x.impProd)} | ${fmt(x.cliquesPag)} |`)
+    md.push(`| ${x.modelo} | ${fmt(x.produtos)} | /${x.slug} | ${x.tipo === "EXISTENTE" ? "existe" : x.tipo === "APROXIMADA" ? "existe (nome aproximado)" : x.tipo === "FAMILIA" ? "existe página da família" : x.produtos === 0 ? "sem produto hoje" : "criar"} | ${fmt(x.cliquesProd)} | ${fmt(x.impProd)} | ${fmt(x.cliquesPag)} |`)
   }
   const pendentes = revisarFusao.filter(([, b]) => !manterSeparado.has(b))
   if (pendentes.length) {
