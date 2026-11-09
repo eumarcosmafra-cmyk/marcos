@@ -158,6 +158,18 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
 tr.clk { cursor: pointer; }
 tr.clk:hover td { background: var(--surface-2); }
 .section-title { font-family: var(--f-display); font-size: 22px; font-weight: 700; text-transform: uppercase; margin: 0; }
+.serp { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.serp .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.serp .s-url { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.serp .s-t { font-size: 18px; color: var(--accent); line-height: 1.3; overflow-wrap: anywhere; }
+.serp .s-d { color: var(--ink); overflow-wrap: anywhere; }
+.serp .s-h1 { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.geral { display: flex; flex-direction: column; gap: 14px; padding-block: 0 32px; }
+.geral p { margin: 0; max-width: 72ch; }
+.check { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; max-width: 80ch; }
+details.box summary { cursor: pointer; font-weight: 600; }
+details.box[open] summary { margin-bottom: 8px; }
+.more-row { display: flex; justify-content: center; padding-top: 10px; }
 
 @media (max-width: 860px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
@@ -193,6 +205,7 @@ tr.clk:hover td { background: var(--surface-2); }
   </div>
   <div class="wrap">
     <nav class="tabs" role="tablist" aria-label="Seções">
+      <button type="button" role="tab" id="tab-geral" aria-selected="false">Visão geral</button>
       <button type="button" role="tab" id="tab-navegar" aria-selected="true">Navegar como visitante</button>
       <button type="button" role="tab" id="tab-pend" aria-selected="false">Pendências</button>
       <button type="button" role="tab" id="tab-mud" aria-selected="false">Mudanças na árvore</button>
@@ -204,6 +217,7 @@ tr.clk:hover td { background: var(--surface-2); }
   <section class="stats" id="stats" aria-label="Resumo"></section>
 </div>
 
+<div class="wrap geral" id="view-geral" hidden></div>
 <div class="wrap" id="view-navegar">
   <div class="layout">
     <aside class="menu" id="menu" aria-label="Menu de categorias"></aside>
@@ -226,23 +240,55 @@ tr.clk:hover td { background: var(--surface-2); }
     DUPLICADO: { rot: "Duplicado", curto: "Duplicado" },
     REVISAR_SEM_MODELO: { rot: "Sem modelo", curto: "Revisar" },
   };
+  const ORDEM_ACOES = ["RECATEGORIZAR", "AJUSTAR_PRINCIPAL", "DUPLICADO", "REVISAR_SEM_MODELO"];
   const TECNICAS = ["mercado livre", "produtos novo", "produtos antigos", "itens promocionais"];
   const GENERICOS = ["conjunto peças chassi", "peças motor", "motor completo"];
-  const SEM_CAT = "Sem categoria (revisar)";
-  const st = { marca: 0, modo: "prop", caminho: [], filtro: "todos", sis: "todos", busca: "", limite: 48, aba: "navegar", abertos: new Set(), pend: "dup" };
-  try { const s = JSON.parse(localStorage.getItem("simulador-estado") || "{}"); if (typeof s.marca === "number" && D.marcas[s.marca]) st.marca = s.marca; if (s.modo === "hoje" || s.modo === "prop") st.modo = s.modo; } catch (e) { /* armazenamento indisponível */ }
-  const salvar = () => { try { localStorage.setItem("simulador-estado", JSON.stringify({ marca: st.marca, modo: st.modo })); } catch (e) { /* ignora */ } };
+  const SEM_CAT = "Pendentes de revisão";
+  const LINHAS = 300;
+  const ABAS = D.completo ? ["geral", "navegar", "pend", "mud"] : ["navegar", "pend", "mud"];
+  const st = { marca: 0, modo: "prop", caminho: [], filtro: "todos", sis: "todos", busca: "", limite: 48, aba: ABAS[0], abertos: new Set(), pend: "dup", linhas: LINHAS, mud: "todas" };
+  try {
+    const s = JSON.parse(localStorage.getItem("simulador-estado") || "{}");
+    const i = D.marcas.findIndex((m) => m.id === s.marca);
+    if (i >= 0) st.marca = i;
+    if (s.modo === "hoje" || s.modo === "prop") st.modo = s.modo;
+    if (ABAS.includes(s.aba)) st.aba = s.aba;
+  } catch (e) { /* armazenamento indisponível */ }
+  const salvar = () => { try { localStorage.setItem("simulador-estado", JSON.stringify({ marca: D.marcas[st.marca].id, modo: st.modo, aba: st.aba })); } catch (e) { /* ignora */ } };
+
+  // Dados de cada marca: no modo completo vêm de dados/<marca>.json, carregado só quando a marca é aberta
+  const CARGA = {};
+  const pronta = (m) => Array.isArray(m.produtos);
+  function expandir(m, x) {
+    const { cam, sis, obs, sec } = x.dic;
+    m.produtos = x.p.map((r) => ({ c: r[0], id: r[1], n: r[2], ac: ORDEM_ACOES[r[3]], an: r[4] >= 0 ? cam[r[4]] : ["(sem categoria principal)"], dp: r[5] >= 0 ? cam[r[5]] : null, a: r[6], s: r[7] >= 0 ? sis[r[7]] : "", o: r[8] >= 0 ? obs[r[8]] : "", sec: r[9] >= 0 ? sec[r[9]] : "" }));
+    for (const k of ["arvore", "mudancas", "duplicados", "paginas", "seo", "slugMarca"]) m[k] = x[k];
+  }
+  function carregar(i) {
+    const m = D.marcas[i];
+    if (pronta(m)) return Promise.resolve(m);
+    if (!CARGA[i]) {
+      CARGA[i] = fetch(m.arquivo)
+        .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then((x) => { expandir(m, x); return m; })
+        .catch((e) => { delete CARGA[i]; console.error("[simulador] Erro ao carregar", m.arquivo, e); throw e; });
+    }
+    return CARGA[i];
+  }
 
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const fmt = (n) => Number(n).toLocaleString("pt-BR");
-  const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const ehTec = (nome) => TECNICAS.includes(String(nome).toLowerCase());
   const ehGen = (nome) => GENERICOS.includes(String(nome).toLowerCase());
   const marca = () => D.marcas[st.marca];
   const caminhoDe = (p) => (st.modo === "prop" ? (p.dp || [SEM_CAT]) : p.an);
 
   // Árvore genérica a partir de caminhos
+  const ARV = {};
   function arvore(m, modo) {
+    const chave = m.nome + "|" + modo;
+    if (ARV[chave]) return ARV[chave];
     const raiz = { nome: "", filhos: new Map(), total: 0, vazio: false };
     const add = (cam, conta) => {
       let no = raiz;
@@ -255,6 +301,7 @@ tr.clk:hover td { background: var(--surface-2); }
     };
     for (const p of m.produtos) add(modo === "prop" ? (p.dp || [SEM_CAT]) : p.an, true);
     if (modo === "prop") for (const cam of m.arvore) add(cam, false);
+    ARV[chave] = raiz;
     return raiz;
   }
   const ordenar = (nos) => Array.from(nos.values()).sort((a, b) => {
@@ -278,15 +325,15 @@ tr.clk:hover td { background: var(--surface-2); }
   function renderStats() {
     const m = marca();
     const conta = (modo) => { let n = 0; const walk = (no) => { for (const f of no.filhos.values()) { n++; walk(f); } }; walk(arvore(m, modo)); return n; };
-    const ml = m.produtos.filter((p) => p.an[0] && ehTec(p.an[0])).length;
-    const gen = m.produtos.filter((p) => ehGen(p.an[p.an.length - 1])).length;
+    const mlL = m.produtos.filter((p) => p.an[0] && ehTec(p.an[0])), ml = mlL.length, mlFica = mlL.filter((p) => !p.dp).length;
+    const genL = m.produtos.filter((p) => ehGen(p.an[p.an.length - 1])), gen = genL.length, genFica = genL.filter((p) => !p.dp).length;
     const dup = m.produtos.filter((p) => p.ac === "DUPLICADO").length;
     const rev = m.produtos.filter((p) => p.ac === "REVISAR_SEM_MODELO").length;
     document.getElementById("stats").innerHTML = [
       `<div class="stat"><b>${fmt(m.produtos.length)}</b><small>produtos da marca</small></div>`,
       `<div class="stat"><b>${fmt(conta("hoje"))}<span class="arrow">→</span>${fmt(conta("prop"))}</b><small>categorias: hoje → proposta</small></div>`,
-      `<div class="stat"><b>${fmt(ml)}<span class="arrow">→</span>0</b><small>com principal em categoria técnica (Mercado Livre)</small></div>`,
-      `<div class="stat"><b>${fmt(gen)}<span class="arrow">→</span>0</b><small>em grupo genérico ("Conjunto peças chassi"…)</small></div>`,
+      `<div class="stat"><b>${fmt(ml)}<span class="arrow">→</span>${fmt(mlFica)}</b><small>com principal em categoria técnica (Mercado Livre)${mlFica ? " · ficam só as sem modelo" : ""}</small></div>`,
+      `<div class="stat"><b>${fmt(gen)}<span class="arrow">→</span>${fmt(genFica)}</b><small>em grupo genérico ("Conjunto peças chassi"…)${genFica ? " · ficam só as sem modelo" : ""}</small></div>`,
       `<div class="stat"><b>${fmt(dup)} · ${fmt(rev)}</b><small>duplicados · sem modelo (decisão da loja)</small></div>`,
     ].join("");
   }
@@ -329,7 +376,9 @@ tr.clk:hover td { background: var(--surface-2); }
     html += `<div class="cat-head"><div><h2>${esc(titulo)}</h2><p>${fmt(base.length)} produto${base.length === 1 ? "" : "s"}${st.caminho.length ? "" : st.modo === "prop" ? " · escolha o modelo da sua moto" : " · como as categorias estão organizadas hoje"}</p></div></div>`;
 
     if (ehTec(titulo)) html += `<div class="note bad">Categoria técnica usada como principal: o breadcrumb do produto mostra "${esc(titulo)}" e não tem link. É o que está hoje no site.</div>`;
-    if (titulo === SEM_CAT) html += `<div class="note bad">Produtos sem modelo identificado no nome. Ficam aqui até a loja definir o modelo (veja a aba Pendências).</div>`;
+    if (titulo === SEM_CAT) html += `<div class="note bad">Peças sem modelo no nome. No envio à Magazord elas não mudam de categoria: continuam onde estão hoje até o modelo ser definido (veja a aba Pendências).</div>`;
+    const so = st.modo === "prop" && st.caminho.length && m.seo ? m.seo[st.caminho.join(" > ")] : null;
+    if (so) html += serp(so, st.caminho, m);
     if (no.total === 0) html += `<div class="note">Categoria mantida sem produtos hoje, para receber peças de novas motos desmontadas.</div>`;
 
     const filhos = ordenar(no.filhos);
@@ -354,7 +403,7 @@ tr.clk:hover td { background: var(--surface-2); }
       for (const p of base) { const k = p.s || "Outros"; sisCont[k] = (sisCont[k] || 0) + 1; }
       const sisLista = Object.entries(sisCont).sort((a, b) => b[1] - a[1]);
       if (st.sis !== "todos" && !sisCont[st.sis]) st.sis = "todos";
-      if (sisLista.length > 1) html += `<div class="chips" role="group" aria-label="Filtrar por sistema"><span class="chip" style="border:0;background:none;padding-inline:0">Sistema</span><button type="button" class="chip" data-sis="todos" aria-pressed="${st.sis === "todos"}">Todos <span class="n">${fmt(base.length)}</span></button>${sisLista.map(([k, n]) => `<button type="button" class="chip" data-sis="${esc(k)}" aria-pressed="${st.sis === k}">${esc(k)} <span class="n">${fmt(n)}</span></button>`).join("")}</div>`;
+      if (sisLista.length > 1 && !filhos.length) html += `<div class="chips" role="group" aria-label="Filtrar por sistema"><span class="chip" style="border:0;background:none;padding-inline:0">Sistema</span><button type="button" class="chip" data-sis="todos" aria-pressed="${st.sis === "todos"}">Todos <span class="n">${fmt(base.length)}</span></button>${sisLista.map(([k, n]) => `<button type="button" class="chip" data-sis="${esc(k)}" aria-pressed="${st.sis === k}">${esc(k)} <span class="n">${fmt(n)}</span></button>`).join("")}</div>`;
       const contaAcao = (a) => base.filter((p) => p.ac === a).length;
       const filtros = [["todos", "Todos", base.length], ...Object.keys(ACOES).map((a) => [a, ACOES[a].curto, contaAcao(a)]).filter((x) => x[2] > 0)];
       if (!filtros.some((f) => f[0] === st.filtro)) st.filtro = "todos";
@@ -370,6 +419,13 @@ tr.clk:hover td { background: var(--surface-2); }
     el.innerHTML = html;
     const b = document.getElementById("busca");
     if (b) b.addEventListener("input", (e) => { st.busca = e.target.value; st.limite = 48; const pos = e.target.selectionStart; renderPagina(); const nb = document.getElementById("busca"); nb.focus(); try { nb.setSelectionRange(pos, pos); } catch (er) { /* ignora */ } });
+  }
+  function serp(so, cam, m) {
+    let url, obs = "";
+    if (so.pg) { url = so.pg; if (so.sit === "CRIAR") obs = " · página a criar"; }
+    else if (cam.length === 1) { url = "/" + (m.slugMarca || slug(cam[0])); if (!m.slugMarca) obs = " · página a criar"; }
+    else { url = "/" + slug(cam.join(" ")); obs = " · endereço sugerido, a definir com a Magazord"; }
+    return `<div class="serp" aria-label="Prévia no Google"><span class="lbl">Como a página aparece no Google (sugestão)</span><span class="s-url">${esc(url)}${esc(obs)}</span><span class="s-t">${esc(so.t)}</span><span class="s-d">${esc(so.md)}</span><span class="s-h1">H1: ${esc(so.h1)}</span></div>`;
   }
   function card(p) {
     const a = ACOES[p.ac];
@@ -398,10 +454,15 @@ tr.clk:hover td { background: var(--surface-2); }
     let html = `<button type="button" class="close" id="fechar">Fechar</button>`;
     html += `<div><span class="badge b-${p.ac}">${esc(a ? a.rot : p.ac)}</span> ${p.a ? "" : `<span class="badge b-inativo">Inativo</span>`}</div>`;
     html += `<h3>${esc(p.n)}</h3>`;
-    html += `<dl class="kv"><dt>Código</dt><dd style="font-family:var(--f-mono)">${esc(p.c)}</dd><dt>Sistema</dt><dd>${esc(p.s || "—")}</dd></dl>`;
+    html += `<dl class="kv"><dt>Código</dt><dd style="font-family:var(--f-mono)">${esc(p.c)}</dd>${p.id ? `<dt>ID no admin</dt><dd style="font-family:var(--f-mono)">${esc(p.id)}</dd>` : ""}<dt>Sistema</dt><dd>${esc(p.s || "—")}</dd></dl>`;
     html += `<div class="box hoje"><span class="lbl">Breadcrumb hoje no site</span><nav class="crumbs">${crumbs(p.an, false)}<span class="sep">›</span><span>${esc(p.n)}</span></nav></div>`;
-    const linkModelo = p.dp && p.dp[1] && m.paginas && m.paginas[p.dp[1]] ? m.paginas[p.dp[1]] : null;
-    html += `<div class="box prop"><span class="lbl">Breadcrumb proposto</span>${p.dp ? `<nav class="crumbs">${crumbs(p.dp, false)}<span class="sep">›</span><span>${esc(p.n)}</span></nav><small style="color:var(--muted)">Links: ${m.slugMarca ? `/${esc(m.slugMarca)}` : "marca: página a criar"}${linkModelo ? ` › /${esc(linkModelo.slug)}${linkModelo.tipo === "CRIAR" ? " (a criar)" : ""}` : ""}${p.s ? ` · filtro Sistema: ${esc(p.s)}` : ""}</small>` : `<span>Sem categoria até a loja definir o modelo.</span>`}</div>`;
+    const links = (p.dp || []).map((n, i) => {
+      if (i === 0) return m.slugMarca ? "/" + m.slugMarca : "/" + slug(n) + " (a criar)";
+      const pg = i === 1 && m.paginas ? m.paginas[n] : null;
+      if (pg) return "/" + pg.slug + (pg.tipo === "CRIAR" ? " (a criar)" : "");
+      return "/" + slug(p.dp.slice(0, i + 1).join(" ")) + " (sugestão)";
+    });
+    html += `<div class="box prop"><span class="lbl">Breadcrumb proposto</span>${p.dp ? `<nav class="crumbs">${crumbs(p.dp, false)}<span class="sep">›</span><span>${esc(p.n)}</span></nav><small style="color:var(--muted);overflow-wrap:anywhere">Links: ${esc(links.join(" › "))}</small>` : `<span>Não muda no envio: continua na categoria de hoje até o modelo ser definido (aba Pendências).</span>`}</div>`;
     if (p.o) html += `<div class="note ${p.ac === "REVISAR_SEM_MODELO" ? "bad" : ""}">${esc(p.o)}</div>`;
     if (dup) {
       const lado = (t, x) => `<div class="box"><span class="lbl">${t}</span><dl class="kv"><dt>Código</dt><dd style="font-family:var(--f-mono)">${esc(x.c)}</dd><dt>Nome</dt><dd>${esc(x.n)}</dd><dt>Ativo</dt><dd>${x.a ? "sim" : "não"}</dd><dt>Categoria</dt><dd>${esc(x.cat)}</dd><dt>Lançamento</dt><dd>${esc(x.lan || "sem data")}</dd></dl></div>`;
@@ -417,6 +478,8 @@ tr.clk:hover td { background: var(--surface-2); }
   }
   function fecharProduto() { document.getElementById("drawer").hidden = true; document.getElementById("drawer-bg").hidden = true; }
 
+  const maisLinhas = (total) => (total > st.linhas ? `<div class="more-row"><button type="button" class="more" id="mais-linhas">Mostrar mais ${fmt(Math.min(LINHAS, total - st.linhas))} de ${fmt(total - st.linhas)}</button></div>` : "");
+
   // ---------- Pendências ----------
   function renderPend() {
     const m = marca();
@@ -427,10 +490,10 @@ tr.clk:hover td { background: var(--surface-2); }
     let html = `<div class="chips" role="group" aria-label="Tipo de pendência" style="padding-block:4px 12px">${abas.map(([k, t]) => `<button type="button" class="chip" data-pend="${k}" aria-pressed="${st.pend === k}">${esc(t)}</button>`).join("")}</div>`;
     if (st.pend === "dup") {
       html += `<p>Mesma peça cadastrada duas vezes: a cópia tem o código sem o zero à esquerda, nome curto e só a categoria Mercado Livre. Antes de desativar, conferir no admin estoque, preço e se há anúncio no Mercado Livre ligado à cópia.</p>`;
-      html += dup.length ? `<div class="table-wrap"><table><thead><tr><th>Situação</th><th>Cópia</th><th>Nome da cópia</th><th>Original</th><th>Nome do original</th><th>Ativos</th></tr></thead><tbody>${dup.map((d) => `<tr class="clk" data-prod="${esc(d.copia.c)}"><td><span class="badge b-DUPLICADO">${esc(d.situacao.replace(/_/g, " ").toLowerCase())}</span></td><td class="mono">${esc(d.copia.c)}</td><td>${esc(d.copia.n)}</td><td class="mono">${esc(d.original.c)}</td><td>${esc(d.original.n)}</td><td>${d.copia.a ? "cópia" : ""}${d.copia.a && d.original.a ? " + " : ""}${d.original.a ? "original" : ""}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">Nenhum duplicado nesta marca.</div>`;
+      html += dup.length ? `<div class="table-wrap"><table><thead><tr><th>Situação</th><th>Cópia</th><th>Nome da cópia</th><th>Original</th><th>Nome do original</th><th>Ativos</th></tr></thead><tbody>${dup.slice(0, st.linhas).map((d) => `<tr class="clk" data-prod="${esc(d.copia.c)}"><td><span class="badge b-DUPLICADO">${esc(d.situacao.replace(/_/g, " ").toLowerCase())}</span></td><td class="mono">${esc(d.copia.c)}</td><td>${esc(d.copia.n)}</td><td class="mono">${esc(d.original.c)}</td><td>${esc(d.original.n)}</td><td>${d.copia.a ? "cópia" : ""}${d.copia.a && d.original.a ? " + " : ""}${d.original.a ? "original" : ""}</td></tr>`).join("")}</tbody></table></div>${maisLinhas(dup.length)}` : `<div class="empty">Nenhum duplicado nesta marca.</div>`;
     } else if (st.pend === "rev") {
       html += `<p>O nome não traz o modelo da moto. Quando os códigos vizinhos (mesma moto desmontada) são todos do mesmo modelo, a sugestão aparece ao lado.</p>`;
-      html += rev.length ? `<div class="table-wrap"><table><thead><tr><th>Código</th><th>Nome</th><th>Categoria hoje</th><th>Sugestão</th></tr></thead><tbody>${rev.map((p) => `<tr class="clk" data-prod="${esc(p.c)}"><td class="mono">${esc(p.c)}</td><td>${esc(p.n)}</td><td>${esc(p.an.join(" › "))}</td><td>${esc(p.o)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">Nenhum produto sem modelo.</div>`;
+      html += rev.length ? `<div class="table-wrap"><table><thead><tr><th>Código</th><th>Nome</th><th>Categoria hoje</th><th>Sugestão</th></tr></thead><tbody>${rev.slice(0, st.linhas).map((p) => `<tr class="clk" data-prod="${esc(p.c)}"><td class="mono">${esc(p.c)}</td><td>${esc(p.n)}</td><td>${esc(p.an.join(" › "))}</td><td>${esc(p.o)}</td></tr>`).join("")}</tbody></table></div>${maisLinhas(rev.length)}` : `<div class="empty">Nenhum produto sem modelo.</div>`;
     } else {
       html += `<p>Modelos com nomes diferentes que podem ser a mesma moto. A referência é a tabela FIPE.</p>`;
       html += dec.length ? `<div class="table-wrap"><table><thead><tr><th>Decisão</th><th>Modelo</th><th>Vai para</th><th class="num">Peças</th><th>Motivo</th></tr></thead><tbody>${dec.map((x) => `<tr><td><span class="badge ${x.ac === "REVISAR_FUSAO" ? "b-REVISAR_SEM_MODELO" : "b-AJUSTAR_PRINCIPAL"}">${esc(x.ac === "FUNDIR" ? "Fundir" : x.ac === "MANTER_SEPARADO" ? "Manter separado" : "Confirmar")}</span></td><td>${esc(x.at)}</td><td>${esc(x.nv)}</td><td class="num">${esc(x.n)}</td><td>${esc(x.m)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">Nenhuma decisão de modelo pendente.</div>`;
@@ -441,51 +504,112 @@ tr.clk:hover td { background: var(--surface-2); }
   // ---------- Mudanças ----------
   function renderMud() {
     const m = marca();
-    const NOMES = { MANTER: "Manter", MANTER_SEM_PRODUTOS: "Manter sem peças", CRIAR: "Criar", FUNDIR: "Fundir", MANTER_SEPARADO: "Manter separado", DESATIVAR: "Desativar", DESATIVAR_APOS_MIGRACAO: "Desativar após migrar", REVISAR_FUSAO: "Confirmar fusão" };
+    const NOMES = { RENOMEAR_RAIZ: "Renomear raiz", MANTER: "Manter", MANTER_SEM_PRODUTOS: "Manter sem peças", CRIAR: "Criar", FUNDIR: "Fundir", MANTER_SEPARADO: "Manter separado", DESATIVAR: "Desativar", DESATIVAR_APOS_MIGRACAO: "Desativar após migrar", REVISAR_FUSAO: "Confirmar fusão" };
     const cont = {};
     for (const x of m.mudancas) cont[x.ac] = (cont[x.ac] || 0) + 1;
+    if (st.mud !== "todas" && !cont[st.mud]) st.mud = "todas";
+    const lista = st.mud === "todas" ? m.mudancas : m.mudancas.filter((x) => x.ac === st.mud);
+    const temId = m.mudancas.some((x) => x.id);
     let html = `<p>O que muda na árvore de categorias da marca para chegar à proposta. Categoria de modelo nenhuma é apagada; os grupos genéricos saem só depois que as peças forem movidas.</p>`;
-    html += `<div class="chips" style="padding-block:0 12px">${Object.keys(cont).map((k) => `<span class="chip">${esc(NOMES[k] || k)} <span class="n">${fmt(cont[k])}</span></span>`).join("")}</div>`;
-    html += `<div class="table-wrap"><table><thead><tr><th>Ação</th><th>Categoria hoje</th><th>Categoria proposta</th><th class="num">Peças</th><th>Motivo</th></tr></thead><tbody>${m.mudancas.map((x) => `<tr><td>${esc(NOMES[x.ac] || x.ac)}</td><td>${esc(x.at)}</td><td>${esc(x.nv)}</td><td class="num">${esc(x.n)}</td><td>${esc(x.m)}</td></tr>`).join("")}</tbody></table></div>`;
+    html += `<div class="chips" role="group" aria-label="Filtrar por ação" style="padding-block:0 12px"><button type="button" class="chip" data-mud="todas" aria-pressed="${st.mud === "todas"}">Todas <span class="n">${fmt(m.mudancas.length)}</span></button>${Object.keys(cont).map((k) => `<button type="button" class="chip" data-mud="${esc(k)}" aria-pressed="${st.mud === k}">${esc(NOMES[k] || k)} <span class="n">${fmt(cont[k])}</span></button>`).join("")}</div>`;
+    html += `<div class="table-wrap"><table><thead><tr><th>Ação</th><th>Categoria hoje</th>${temId ? "<th>ID</th>" : ""}<th>Categoria proposta</th><th class="num">Peças</th><th>Motivo</th></tr></thead><tbody>${lista.slice(0, st.linhas).map((x) => `<tr><td>${esc(NOMES[x.ac] || x.ac)}</td><td>${esc(x.at)}</td>${temId ? `<td class="mono">${esc(x.id)}</td>` : ""}<td>${esc(x.nv)}</td><td class="num">${esc(x.n)}</td><td>${esc(x.m)}</td></tr>`).join("")}</tbody></table></div>${maisLinhas(lista.length)}`;
     document.getElementById("view-mud").innerHTML = html;
+  }
+
+  // ---------- Visão geral (todas as marcas) ----------
+  function renderStatsGeral() {
+    const soma = (k) => D.marcas.reduce((a, m) => a + (m.resumo ? m.resumo[k] : 0), 0);
+    const total = D.marcas.reduce((a, m) => a + m.total, 0);
+    document.getElementById("stats").innerHTML = [
+      `<div class="stat"><b>${fmt(total)}</b><small>produtos com marca de moto · ${fmt(D.marcas.length)} marcas</small></div>`,
+      `<div class="stat"><b>${fmt(soma("modelos"))} · ${fmt(soma("subcats"))}</b><small>modelos · subcategorias de sistema propostos</small></div>`,
+      `<div class="stat"><b>${fmt(soma("ml"))}</b><small>saem do "Mercado Livre" como principal</small></div>`,
+      `<div class="stat"><b>${fmt(soma("gen"))}</b><small>saem do grupo genérico ("Conjunto peças chassi"…)</small></div>`,
+      `<div class="stat"><b>${fmt(soma("dup"))} · ${fmt(soma("rev"))}</b><small>duplicados (decisão da loja) · sem modelo (ficam como estão)</small></div>`,
+    ].join("");
+  }
+  function renderGeral() {
+    const soma = (k) => D.marcas.reduce((a, m) => a + m.resumo[k], 0);
+    const dec = D.decisoes || [];
+    const fund = dec.filter((x) => x.dec === "Fundir").length;
+    const sep = dec.length - fund;
+    const sm = D.semMarca || [];
+    let html = `<p>Recategorização completa na estrutura Marca › Modelo › Sistema, com dados reais do catálogo (API Magazord) e da demanda no Google (Search Console, 6 meses). Clique numa marca para navegar como visitante. Nada foi alterado na loja.</p>`;
+    html += `<h3 class="section-title">Antes de enviar à Magazord</h3><ul class="check">`;
+    html += `<li><b>${fmt(soma("dup"))} duplicados</b>: a loja decide qual cadastro fica (lista caso a caso na aba Pendências de cada marca). Se a cópia ficar, vai para a categoria que o simulador já mostra; se sair, é desativada.</li>`;
+    html += `<li><b>${fmt(soma("rev"))} peças sem modelo no nome</b>: continuam na categoria atual até o modelo ser definido.</li>`;
+    html += `<li><b>${fmt(sm.length)} peças sem marca de moto</b> (Vento, pneus etc.): ficam fora desta recategorização.</li>`;
+    html += `<li><b>${fmt(dec.length)} decisões de modelo</b> já aplicadas (${fmt(fund)} fusões, ${fmt(sep)} mantidos separados): vale revisar os separados sem referência na FIPE.</li>`;
+    html += `<li>Formato da importação e vínculo da categoria com a página pública: perguntas do item 8 do chamado.</li></ul>`;
+    html += `<h3 class="section-title">Por marca</h3>`;
+    html += `<div class="table-wrap"><table><thead><tr><th>Marca</th><th class="num">Produtos</th><th class="num">Modelos</th><th class="num">Subcat.</th><th class="num">Saem do ML</th><th class="num">Saem do genérico</th><th class="num">Duplicados</th><th class="num">Sem modelo</th><th class="num">Páginas de modelo (existem · a criar)</th><th class="num">Cliques das peças (6m)</th><th>Raiz</th></tr></thead><tbody>`;
+    html += D.marcas.map((m, i) => { const r = m.resumo; return `<tr class="clk" data-abrir="${i}"><td><b>${esc(m.nome)}</b></td><td class="num">${fmt(m.total)}</td><td class="num">${fmt(r.modelos)}</td><td class="num">${fmt(r.subcats)}</td><td class="num">${fmt(r.ml)}</td><td class="num">${fmt(r.gen)}</td><td class="num">${fmt(r.dup)}</td><td class="num">${fmt(r.rev)}</td><td class="num">${fmt(r.pagExiste)} · ${fmt(r.pagCriar)}</td><td class="num">${fmt(r.cliques)}</td><td>${esc(r.raiz)}</td></tr>`; }).join("");
+    html += `</tbody></table></div>`;
+    if (dec.length) html += `<details class="box"><summary>Decisões de modelo (${fmt(dec.length)})</summary><p style="padding-bottom:8px">Nomes diferentes que podem ser a mesma moto. A referência é a tabela FIPE.</p><div class="table-wrap"><table><thead><tr><th>Marca</th><th>Decisão</th><th>Modelo hoje</th><th>Fica como</th><th class="num">Peças</th><th>Motivo</th></tr></thead><tbody>${dec.map((x) => `<tr><td>${esc(x.marca)}</td><td><span class="badge ${x.dec === "Fundir" ? "b-AJUSTAR_PRINCIPAL" : "b-RECATEGORIZAR"}">${esc(x.dec)}</span></td><td>${esc(x.at)}</td><td>${esc(x.nv)}</td><td class="num">${esc(x.n)}</td><td>${esc(x.m)}</td></tr>`).join("")}</tbody></table></div></details>`;
+    if (sm.length) html += `<details class="box"><summary>Sem marca de moto (${fmt(sm.length)})</summary><div class="table-wrap"><table><thead><tr><th>Código</th><th>Nome</th><th>Marca no cadastro</th><th>Ativo</th></tr></thead><tbody>${sm.map((x) => `<tr><td class="mono">${esc(x.c)}</td><td>${esc(x.n)}</td><td>${esc(x.marca)}</td><td>${x.a ? "sim" : "não"}</td></tr>`).join("")}</tbody></table></div></details>`;
+    document.getElementById("view-geral").innerHTML = html;
+  }
+
+  // ---------- Carregando / erro ----------
+  function renderCarregando(m) {
+    document.getElementById("stats").innerHTML = `<div class="stat"><b>${esc(m.nome)}</b><small>carregando ${fmt(m.total)} produtos${m.kb ? ` (${fmt(Math.round(m.kb / 102.4) / 10)} MB)` : ""}…</small></div>`;
+    const msg = `<div class="empty" role="status">Carregando os dados de ${esc(m.nome)}…</div>`;
+    document.getElementById("menu").innerHTML = "";
+    for (const id of ["pagina", "view-pend", "view-mud"]) document.getElementById(id).innerHTML = msg;
+  }
+  function renderErro(m) {
+    const msg = `<div class="empty" role="alert">Não foi possível carregar os dados de ${esc(m.nome)}. <button type="button" class="more" id="tentar">Tentar de novo</button></div>`;
+    for (const id of ["pagina", "view-pend", "view-mud"]) document.getElementById(id).innerHTML = msg;
   }
 
   // ---------- Controle ----------
   function renderTudo() {
     document.getElementById("btn-hoje").setAttribute("aria-pressed", st.modo === "hoje");
     document.getElementById("btn-prop").setAttribute("aria-pressed", st.modo === "prop");
-    for (const [id, v] of [["tab-navegar", "navegar"], ["tab-pend", "pend"], ["tab-mud", "mud"]]) document.getElementById(id).setAttribute("aria-selected", st.aba === v);
-    document.getElementById("view-navegar").hidden = st.aba !== "navegar";
-    document.getElementById("view-pend").hidden = st.aba !== "pend";
-    document.getElementById("view-mud").hidden = st.aba !== "mud";
+    for (const v of ["geral", "navegar", "pend", "mud"]) {
+      document.getElementById("tab-" + v).setAttribute("aria-selected", st.aba === v);
+      document.getElementById("view-" + v).hidden = st.aba !== v;
+    }
+    if (st.aba === "geral") { renderStatsGeral(); renderGeral(); return; }
+    const i = st.marca, m = marca();
+    if (!pronta(m)) {
+      renderCarregando(m);
+      carregar(i).then(() => { if (st.marca === i) renderTudo(); }).catch(() => { if (st.marca === i) renderErro(m); });
+      return;
+    }
     renderStats();
     if (st.aba === "navegar") { renderMenu(); renderPagina(); }
     if (st.aba === "pend") renderPend();
     if (st.aba === "mud") renderMud();
   }
+  const irPara = (aba) => { st.aba = aba; st.linhas = LINHAS; salvar(); renderTudo(); window.scrollTo(0, 0); };
+  const escolherMarca = (i) => { st.marca = i; sel.value = String(i); st.caminho = []; st.abertos.clear(); st.filtro = "todos"; st.sis = "todos"; st.busca = ""; st.linhas = LINHAS; st.mud = "todas"; };
+  if (!D.completo) document.getElementById("tab-geral").hidden = true;
   const sel = document.getElementById("sel-marca");
-  sel.innerHTML = D.marcas.map((m, i) => `<option value="${i}">${esc(m.nome)} (${fmt(m.produtos.length)})</option>`).join("");
+  sel.innerHTML = D.marcas.map((m, i) => `<option value="${i}">${esc(m.nome)} (${fmt(m.total ?? m.produtos.length)})</option>`).join("");
   sel.value = String(st.marca);
-  sel.addEventListener("change", () => { st.marca = Number(sel.value); st.caminho = []; st.abertos.clear(); st.filtro = "todos"; st.busca = ""; salvar(); renderTudo(); });
-  document.getElementById("btn-hoje").addEventListener("click", () => { st.modo = "hoje"; st.caminho = []; st.abertos.clear(); salvar(); renderTudo(); });
-  document.getElementById("btn-prop").addEventListener("click", () => { st.modo = "prop"; st.caminho = []; st.abertos.clear(); salvar(); renderTudo(); });
-  document.getElementById("tab-navegar").addEventListener("click", () => { st.aba = "navegar"; renderTudo(); });
-  document.getElementById("tab-pend").addEventListener("click", () => { st.aba = "pend"; renderTudo(); });
-  document.getElementById("tab-mud").addEventListener("click", () => { st.aba = "mud"; renderTudo(); });
+  sel.addEventListener("change", () => { escolherMarca(Number(sel.value)); if (st.aba === "geral") st.aba = "navegar"; salvar(); renderTudo(); });
+  document.getElementById("btn-hoje").addEventListener("click", () => { st.modo = "hoje"; st.caminho = []; st.abertos.clear(); if (st.aba === "geral") st.aba = "navegar"; salvar(); renderTudo(); });
+  document.getElementById("btn-prop").addEventListener("click", () => { st.modo = "prop"; st.caminho = []; st.abertos.clear(); if (st.aba === "geral") st.aba = "navegar"; salvar(); renderTudo(); });
+  for (const v of ["geral", "navegar", "pend", "mud"]) document.getElementById("tab-" + v).addEventListener("click", () => irPara(v));
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-cam],[data-tw],[data-filtro],[data-sis],[data-prod],[data-pend],#mais,#fechar,#drawer-bg");
+    const t = e.target.closest("[data-cam],[data-tw],[data-filtro],[data-sis],[data-prod],[data-pend],[data-mud],[data-abrir],#mais,#mais-linhas,#tentar,#fechar,#drawer-bg");
     if (!t) return;
     if (t.id === "fechar" || t.id === "drawer-bg") return fecharProduto();
+    if (t.id === "tentar") return renderTudo();
+    if (t.id === "mais-linhas") { st.linhas += LINHAS; return st.aba === "pend" ? renderPend() : renderMud(); }
+    if (t.dataset.abrir) { const i = Number(t.dataset.abrir); escolherMarca(i); st.modo = "prop"; st.caminho = [D.marcas[i].nome]; st.abertos.add(JSON.stringify(st.caminho)); return irPara("navegar"); }
+    if (t.dataset.mud) { st.mud = t.dataset.mud; st.linhas = LINHAS; return renderMud(); }
     if (t.id === "mais") { st.limite += 48; return renderPagina(); }
     if (t.dataset.tw) { const k = t.dataset.tw; st.abertos.has(k) ? st.abertos.delete(k) : st.abertos.add(k); return renderMenu(); }
     if (t.dataset.cam) { st.caminho = JSON.parse(t.dataset.cam); st.abertos.add(t.dataset.cam); st.filtro = "todos"; st.sis = "todos"; st.busca = ""; st.limite = 48; renderMenu(); renderPagina(); document.getElementById("pagina").scrollIntoView({ block: "start", behavior: "auto" }); return; }
     if (t.dataset.filtro) { st.filtro = t.dataset.filtro; st.limite = 48; return renderPagina(); }
     if (t.dataset.sis) { st.sis = t.dataset.sis; st.limite = 48; return renderPagina(); }
-    if (t.dataset.pend) { st.pend = t.dataset.pend; return renderPend(); }
+    if (t.dataset.pend) { st.pend = t.dataset.pend; st.linhas = LINHAS; return renderPend(); }
     if (t.dataset.prod) return abrirProduto(t.dataset.prod);
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") fecharProduto(); });
-  document.getElementById("subtitulo").textContent = `Marca › Modelo › Sistema · dados de ${D.geradoEm} · somente leitura`;
+  document.getElementById("subtitulo").textContent = `Marca › Modelo › Sistema · ${D.completo ? `${D.marcas.length} marcas · ` : ""}dados de ${D.geradoEm} · somente leitura`;
   renderTudo();
 })();
 </script>

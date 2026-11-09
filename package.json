@@ -17,6 +17,7 @@
     "audit:consolidar": "tsx scripts/catalog-audit/consolidar.ts",
     "audit:duplicados": "tsx scripts/catalog-audit/api-duplicados.ts",
     "audit:simulador": "tsx scripts/catalog-audit/simulador.ts",
+    "audit:simulador-completo": "NODE_OPTIONS=--max-old-space-size=4096 tsx scripts/catalog-audit/simulador-completo.ts",
     "audit:gsc": "tsx scripts/catalog-audit/gsc-analise.ts",
     "audit:gsc-extrair": "tsx scripts/catalog-audit/gsc-extrair.ts",
     "audit:gsc-inspecao": "tsx scripts/catalog-audit/gsc-inspecao.ts",
