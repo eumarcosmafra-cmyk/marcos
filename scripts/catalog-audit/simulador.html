@@ -229,7 +229,7 @@ tr.clk:hover td { background: var(--surface-2); }
   const TECNICAS = ["mercado livre", "produtos novo", "produtos antigos", "itens promocionais"];
   const GENERICOS = ["conjunto peças chassi", "peças motor", "motor completo"];
   const SEM_CAT = "Sem categoria (revisar)";
-  const st = { marca: 0, modo: "prop", caminho: [], filtro: "todos", busca: "", limite: 48, aba: "navegar", abertos: new Set(), pend: "dup" };
+  const st = { marca: 0, modo: "prop", caminho: [], filtro: "todos", sis: "todos", busca: "", limite: 48, aba: "navegar", abertos: new Set(), pend: "dup" };
   try { const s = JSON.parse(localStorage.getItem("simulador-estado") || "{}"); if (typeof s.marca === "number" && D.marcas[s.marca]) st.marca = s.marca; if (s.modo === "hoje" || s.modo === "prop") st.modo = s.modo; } catch (e) { /* armazenamento indisponível */ }
   const salvar = () => { try { localStorage.setItem("simulador-estado", JSON.stringify({ marca: st.marca, modo: st.modo })); } catch (e) { /* ignora */ } };
 
@@ -336,20 +336,31 @@ tr.clk:hover td { background: var(--surface-2); }
     // Início e página da marca: cartões (escolha da categoria / do modelo). Modelo e abaixo: chips + produtos.
     const comoCartoes = filhos.length > 0 && st.caminho.length <= 1;
     if (comoCartoes) {
-      html += `<div class="models">${filhos.map((f) => `<button type="button" class="model ${f.total === 0 ? "vazio" : ""} ${ehTec(f.nome) || f.nome === SEM_CAT ? "tecnica" : ""}" data-cam="${esc(JSON.stringify([...st.caminho, f.nome]))}"><b>${esc(f.nome)}</b><small>${f.total ? `${fmt(f.total)} peça${f.total === 1 ? "" : "s"}` : "sem peças hoje"}${f.filhos.size ? ` · ${f.filhos.size} subcategoria${f.filhos.size === 1 ? "" : "s"}` : ""}</small></button>`).join("")}</div>`;
+      const pgs = st.modo === "prop" && st.caminho.length === 1 ? (m.paginas || {}) : {};
+      const ordem = st.modo === "prop" && st.caminho.length === 1 ? [...filhos].sort((a, b) => ((pgs[b.nome] || {}).cliquesProd || 0) - ((pgs[a.nome] || {}).cliquesProd || 0) || b.total - a.total) : filhos;
+      html += `<div class="models">${ordem.map((f) => { const pg = pgs[f.nome]; const dem = pg ? `<small>${fmt(pg.cliquesProd)} cliques · ${fmt(pg.impProd)} impr. (6 meses)</small><span class="badge ${pg.tipo === "CRIAR" ? "b-REVISAR_SEM_MODELO" : "b-AJUSTAR_PRINCIPAL"}">${pg.tipo === "CRIAR" ? (f.total ? "página a criar" : "sem peças") : "página existe"}</span>` : ""; return `<button type="button" class="model ${f.total === 0 ? "vazio" : ""} ${ehTec(f.nome) || f.nome === SEM_CAT ? "tecnica" : ""}" data-cam="${esc(JSON.stringify([...st.caminho, f.nome]))}"><b>${esc(f.nome)}</b><small>${f.total ? `${fmt(f.total)} peça${f.total === 1 ? "" : "s"}` : "sem peças hoje"}${f.filhos.size ? ` · ${f.filhos.size} subcategoria${f.filhos.size === 1 ? "" : "s"}` : ""}</small>${dem}</button>`; }).join("")}</div>`;
     } else if (filhos.length) {
       html += `<div class="chips" aria-label="Subcategorias">${filhos.map((f) => `<button type="button" class="chip" data-cam="${esc(JSON.stringify([...st.caminho, f.nome]))}">${esc(f.nome)} <span class="n">${fmt(f.total)}</span></button>`).join("")}</div>`;
       const diretos = base.filter((p) => caminhoDe(p).length === st.caminho.length).length;
       if (diretos && st.modo === "prop") html += `<div class="note">${fmt(diretos)} peça${diretos === 1 ? " fica" : "s ficam"} direto em "${esc(titulo)}": o sistema delas tem menos de 10 peças neste modelo, então não ganhou subcategoria.</div>`;
     }
 
+    if (st.modo === "prop" && st.caminho.length === 2 && m.paginas && m.paginas[titulo]) {
+      const pg = m.paginas[titulo];
+      html += `<div class="note">${pg.tipo === "CRIAR" ? `Página pública do modelo: <b>a criar</b> (sugestão <code>/${esc(pg.slug)}</code>).` : `Página pública do modelo: <code>/${esc(pg.slug)}</code>${pg.tipo === "APROXIMADA" ? " (nome aproximado)" : ""} · ${fmt(pg.cliquesPag)} cliques e ${fmt(pg.impPag)} impressões em 6 meses.`} As peças deste modelo tiveram ${fmt(pg.cliquesProd)} cliques e ${fmt(pg.impProd)} impressões no Google no mesmo período.</div>`;
+    }
     if (!comoCartoes && st.caminho.length) {
+      const sisCont = {};
+      for (const p of base) { const k = p.s || "Outros"; sisCont[k] = (sisCont[k] || 0) + 1; }
+      const sisLista = Object.entries(sisCont).sort((a, b) => b[1] - a[1]);
+      if (st.sis !== "todos" && !sisCont[st.sis]) st.sis = "todos";
+      if (sisLista.length > 1) html += `<div class="chips" role="group" aria-label="Filtrar por sistema"><span class="chip" style="border:0;background:none;padding-inline:0">Sistema</span><button type="button" class="chip" data-sis="todos" aria-pressed="${st.sis === "todos"}">Todos <span class="n">${fmt(base.length)}</span></button>${sisLista.map(([k, n]) => `<button type="button" class="chip" data-sis="${esc(k)}" aria-pressed="${st.sis === k}">${esc(k)} <span class="n">${fmt(n)}</span></button>`).join("")}</div>`;
       const contaAcao = (a) => base.filter((p) => p.ac === a).length;
       const filtros = [["todos", "Todos", base.length], ...Object.keys(ACOES).map((a) => [a, ACOES[a].curto, contaAcao(a)]).filter((x) => x[2] > 0)];
       if (!filtros.some((f) => f[0] === st.filtro)) st.filtro = "todos";
       html += `<div class="toolbar"><div class="chips" role="group" aria-label="Filtrar por ação">${filtros.map(([k, rot, n]) => `<button type="button" class="chip" data-filtro="${k}" aria-pressed="${st.filtro === k}">${esc(rot)} <span class="n">${fmt(n)}</span></button>`).join("")}</div><input type="search" id="busca" placeholder="Buscar peça ou código" value="${esc(st.busca)}" aria-label="Buscar peça ou código"></div>`;
       const q = norm(st.busca);
-      const lista = base.filter((p) => (st.filtro === "todos" || p.ac === st.filtro) && (!q || norm(p.n).includes(q) || norm(p.c).includes(q)));
+      const lista = base.filter((p) => (st.filtro === "todos" || p.ac === st.filtro) && (st.sis === "todos" || (p.s || "Outros") === st.sis) && (!q || norm(p.n).includes(q) || norm(p.c).includes(q)));
       if (!lista.length) html += `<div class="empty">Nenhuma peça com esse filtro.</div>`;
       else {
         html += `<div class="grid">${lista.slice(0, st.limite).map((p) => card(p)).join("")}</div>`;
@@ -376,7 +387,11 @@ tr.clk:hover td { background: var(--surface-2); }
     let jsonld = "";
     if (p.dp) {
       const itens = [{ "@type": "ListItem", position: 1, name: "Início", item: "/" }];
-      p.dp.forEach((n, i) => itens.push({ "@type": "ListItem", position: i + 2, name: n, item: "/" + slug(p.dp.slice(0, i + 1).join(" ")) }));
+      p.dp.forEach((n, i) => {
+        const pg = i === 1 && m.paginas ? m.paginas[n] : null;
+        const url = i === 0 ? (m.slugMarca ? "/" + m.slugMarca : "/" + slug(n)) : pg ? "/" + pg.slug : "/" + slug(p.dp.slice(0, i + 1).join(" "));
+        itens.push({ "@type": "ListItem", position: i + 2, name: n, item: url });
+      });
       itens.push({ "@type": "ListItem", position: p.dp.length + 2, name: p.n });
       jsonld = JSON.stringify({ "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: itens }, null, 2);
     }
@@ -385,14 +400,15 @@ tr.clk:hover td { background: var(--surface-2); }
     html += `<h3>${esc(p.n)}</h3>`;
     html += `<dl class="kv"><dt>Código</dt><dd style="font-family:var(--f-mono)">${esc(p.c)}</dd><dt>Sistema</dt><dd>${esc(p.s || "—")}</dd></dl>`;
     html += `<div class="box hoje"><span class="lbl">Breadcrumb hoje no site</span><nav class="crumbs">${crumbs(p.an, false)}<span class="sep">›</span><span>${esc(p.n)}</span></nav></div>`;
-    html += `<div class="box prop"><span class="lbl">Breadcrumb proposto</span>${p.dp ? `<nav class="crumbs">${crumbs(p.dp, false)}<span class="sep">›</span><span>${esc(p.n)}</span></nav>` : `<span>Sem categoria até a loja definir o modelo.</span>`}</div>`;
+    const linkModelo = p.dp && p.dp[1] && m.paginas && m.paginas[p.dp[1]] ? m.paginas[p.dp[1]] : null;
+    html += `<div class="box prop"><span class="lbl">Breadcrumb proposto</span>${p.dp ? `<nav class="crumbs">${crumbs(p.dp, false)}<span class="sep">›</span><span>${esc(p.n)}</span></nav><small style="color:var(--muted)">Links: ${m.slugMarca ? `/${esc(m.slugMarca)}` : "marca: página a criar"}${linkModelo ? ` › /${esc(linkModelo.slug)}${linkModelo.tipo === "CRIAR" ? " (a criar)" : ""}` : ""}${p.s ? ` · filtro Sistema: ${esc(p.s)}` : ""}</small>` : `<span>Sem categoria até a loja definir o modelo.</span>`}</div>`;
     if (p.o) html += `<div class="note ${p.ac === "REVISAR_SEM_MODELO" ? "bad" : ""}">${esc(p.o)}</div>`;
     if (dup) {
       const lado = (t, x) => `<div class="box"><span class="lbl">${t}</span><dl class="kv"><dt>Código</dt><dd style="font-family:var(--f-mono)">${esc(x.c)}</dd><dt>Nome</dt><dd>${esc(x.n)}</dd><dt>Ativo</dt><dd>${x.a ? "sim" : "não"}</dd><dt>Categoria</dt><dd>${esc(x.cat)}</dd><dt>Lançamento</dt><dd>${esc(x.lan || "sem data")}</dd></dl></div>`;
       html += `<div class="pair">${lado("Esta cópia", dup.copia)}${lado("Original na árvore", dup.original)}</div><div class="note">${esc(dup.sugestao)}</div>`;
     }
     if (p.sec) html += `<div class="box"><span class="lbl">Categorias atuais (ficam como secundárias)</span><span>${esc(p.sec)}</span></div>`;
-    if (jsonld) html += `<div class="box"><span class="lbl">Como o Google lê o breadcrumb proposto (URLs ilustrativas)</span><pre class="code">${esc(jsonld)}</pre></div>`;
+    if (jsonld) html += `<div class="box"><span class="lbl">Como o Google lê o breadcrumb proposto</span><pre class="code">${esc(jsonld)}</pre></div>`;
     const d = document.getElementById("drawer");
     d.innerHTML = html;
     d.hidden = false;
@@ -457,13 +473,14 @@ tr.clk:hover td { background: var(--surface-2); }
   document.getElementById("tab-pend").addEventListener("click", () => { st.aba = "pend"; renderTudo(); });
   document.getElementById("tab-mud").addEventListener("click", () => { st.aba = "mud"; renderTudo(); });
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-cam],[data-tw],[data-filtro],[data-prod],[data-pend],#mais,#fechar,#drawer-bg");
+    const t = e.target.closest("[data-cam],[data-tw],[data-filtro],[data-sis],[data-prod],[data-pend],#mais,#fechar,#drawer-bg");
     if (!t) return;
     if (t.id === "fechar" || t.id === "drawer-bg") return fecharProduto();
     if (t.id === "mais") { st.limite += 48; return renderPagina(); }
     if (t.dataset.tw) { const k = t.dataset.tw; st.abertos.has(k) ? st.abertos.delete(k) : st.abertos.add(k); return renderMenu(); }
-    if (t.dataset.cam) { st.caminho = JSON.parse(t.dataset.cam); st.abertos.add(t.dataset.cam); st.filtro = "todos"; st.busca = ""; st.limite = 48; renderMenu(); renderPagina(); document.getElementById("pagina").scrollIntoView({ block: "start", behavior: "auto" }); return; }
+    if (t.dataset.cam) { st.caminho = JSON.parse(t.dataset.cam); st.abertos.add(t.dataset.cam); st.filtro = "todos"; st.sis = "todos"; st.busca = ""; st.limite = 48; renderMenu(); renderPagina(); document.getElementById("pagina").scrollIntoView({ block: "start", behavior: "auto" }); return; }
     if (t.dataset.filtro) { st.filtro = t.dataset.filtro; st.limite = 48; return renderPagina(); }
+    if (t.dataset.sis) { st.sis = t.dataset.sis; st.limite = 48; return renderPagina(); }
     if (t.dataset.pend) { st.pend = t.dataset.pend; return renderPend(); }
     if (t.dataset.prod) return abrirProduto(t.dataset.prod);
   });

@@ -11,7 +11,7 @@
  *
  * Uso: npm run audit:piloto -- --marca dayun [--corte 50] [--export caminho/categorias-export-magazord.csv]
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { parseArgs } from "node:util"
 import type { CategoriaMagazord, ProdutoMagazord } from "./magazord"
@@ -40,10 +40,13 @@ const compacta = (s: string) => tokenizar(s.replace(/\([^)]*\)/g, " ")).join("")
 const TRIM = /\s+(ABS|SE|DLX)$/i
 
 function main(): void {
-  const { values } = parseArgs({ options: { marca: { type: "string" }, corte: { type: "string" }, dir: { type: "string" }, export: { type: "string" }, fusoes: { type: "string" } } })
+  const { values } = parseArgs({ options: { marca: { type: "string" }, corte: { type: "string" }, dir: { type: "string" }, export: { type: "string" }, fusoes: { type: "string" }, sistema: { type: "string" }, publicas: { type: "string" }, gsc: { type: "string" } } })
   if (!values.marca) throw new Error("Informe --marca (ex.: dayun)")
   const marcaAlvo = norm(values.marca)
-  const corte = Number(values.corte ?? 10)
+  // --sistema filtro: Sistema vira característica (filtro) e não categoria; a árvore fica Marca > Modelo
+  const modoFiltro = values.sistema === "filtro"
+  const corte = modoFiltro ? Number.POSITIVE_INFINITY : Number(values.corte ?? 10)
+  const sufixo = modoFiltro ? "filtro" : `corte${corte}`
   const dir = values.dir ?? join("output", "catalog-audit", "api")
   const saida = join("output", "catalog-audit", "piloto", marcaAlvo.replace(/\s+/g, "-"))
   mkdirSync(saida, { recursive: true })
@@ -273,7 +276,75 @@ function main(): void {
     const sistemas = Array.from(new Set(linhas.filter((l) => l.modelo === m && (volNo.get(`${m}|${l.sistema}`) ?? 0) >= corte).map((l) => l.sistema))).sort()
     for (const s of sistemas) arvore.push([s, `${nomeRaiz} > ${m}`, "Produto", "", "1"])
   }
-  writeFileSync(join(saida, `categorias-magazord-corte${corte}.csv`), csvMagazord(arvore))
+  writeFileSync(join(saida, `categorias-magazord-${sufixo}.csv`), csvMagazord(arvore))
+
+  // 1b) Modelo -> página pública existente e demanda real (GSC, 6 meses) nos produtos e na página do modelo
+  const slugify = (x: string) => tokenizar(x).join("-")
+  const arqPub = values.publicas ?? join("output", "catalog-audit", "site", "categorias-publicas.txt")
+  const publicas = existsSync(arqPub) ? new Set(readFileSync(arqPub, "utf-8").split(/\r?\n/).map((l) => l.trim()).filter(Boolean)) : new Set<string>()
+  const paginaPublica = (m: string): { slug: string; tipo: string } => {
+    const exato = slugify(m)
+    if (publicas.has(exato)) return { slug: exato, tipo: "EXISTENTE" }
+    const comMarca = slugify(`${nomeRaiz} ${m}`)
+    if (publicas.has(comMarca)) return { slug: comMarca, tipo: "EXISTENTE" }
+    const tm = new Set(tokenizar(m))
+    // Página de nome aproximado só vale se não for a página exata de outro modelo da lista ("/comet-250" é da COMET 250, não da GT)
+    const deOutroModelo = new Set(modelosFinais.filter((x) => x !== m).map((x) => slugify(x)))
+    const aprox = Array.from(publicas).filter((pub) => {
+      const tp = pub.split("-")
+      return tp.length >= 2 && tp.some((x) => /\d/.test(x)) && tp.every((x) => tm.has(x)) && !deOutroModelo.has(pub)
+    }).sort((a, b) => b.length - a.length)[0]
+    if (aprox) return { slug: aprox, tipo: "APROXIMADA" }
+    return { slug: exato, tipo: "CRIAR" }
+  }
+  const slugMarca = publicas.has(slugify(nomeRaiz)) ? slugify(nomeRaiz) : null
+  const arqGsc = values.gsc ?? join("output", "catalog-audit", "gsc-api", "Páginas.csv")
+  const demandaProd = new Map<string, { c: number; i: number; n: number }>()
+  const demandaPag = new Map<string, { c: number; i: number }>()
+  if (existsSync(arqGsc)) {
+    const outrasMarcas = new Set(MARCAS_SLUG.flatMap((x) => x.tokens).filter((t) => !tokenizar(nomeRaiz).includes(t)))
+    const canonFinal = (n: string) => fusoesManuais.get(canonico.get(n) ?? n)?.para ?? canonico.get(n) ?? n
+    for (const r of lerCsv(readFileSync(arqGsc, "utf-8"), ",")) {
+      const url = r["Páginas principais"] ?? ""
+      let path = ""
+      try {
+        path = decodeURIComponent(new URL(url).pathname).replace(/^\/+|\/+$/g, "")
+      } catch (e) {
+        console.error("[piloto] URL inválida no GSC:", url, e instanceof Error ? e.message : e)
+        continue
+      }
+      const c = Number(r.Cliques) || 0
+      const i = Number(r["Impressões"]) || 0
+      if (publicas.has(path)) {
+        const v = demandaPag.get(path) ?? { c: 0, i: 0 }
+        v.c += c; v.i += i
+        demandaPag.set(path, v)
+        continue
+      }
+      const t = tokenizar(path)
+      if (t.some((x) => outrasMarcas.has(x))) continue
+      const m = casarModeloDaMarca(path)
+      if (!m) continue
+      const k = canonFinal(m.nome)
+      const v = demandaProd.get(k) ?? { c: 0, i: 0, n: 0 }
+      v.c += c; v.i += i; v.n++
+      demandaProd.set(k, v)
+    }
+  }
+  const modelosPaginas = modelosFinais.map((m) => {
+    const pg = paginaPublica(m)
+    const dp = demandaProd.get(m) ?? { c: 0, i: 0, n: 0 }
+    const dg = demandaPag.get(pg.slug) ?? { c: 0, i: 0 }
+    return { modelo: m, produtos: linhas.filter((l) => l.modelo === m).length, ...pg, cliquesProd: dp.c, impProd: dp.i, paginasProd: dp.n, cliquesPag: dg.c, impPag: dg.i }
+  })
+  writeFileSync(
+    join(saida, `modelos-paginas-${sufixo}.csv`),
+    csvExcel([
+      ["modelo", "produtos", "pagina_publica", "situacao_pagina", "cliques_produtos_6m", "impressoes_produtos_6m", "cliques_pagina_modelo_6m", "impressoes_pagina_modelo_6m"],
+      ...modelosPaginas.sort((a, b) => b.cliquesProd - a.cliquesProd || b.produtos - a.produtos).map((x) => [x.modelo, x.produtos, `/${x.slug}`, x.tipo, x.cliquesProd, x.impProd, x.cliquesPag, x.impPag]),
+    ]),
+  )
+  const paginaDoModelo = new Map(modelosPaginas.map((x) => [x.modelo, x]))
 
   // 2) Mudanças na árvore atual
   const mud: (string | number | null)[][] = [["acao", "categoria_atual", "categoria_nova", "produtos", "motivo"]]
@@ -302,10 +373,10 @@ function main(): void {
   for (const [m, obs] of manterSeparado) mud.push(["MANTER_SEPARADO", `${nomeRaiz} > ${m}`, `${nomeRaiz} > ${m}`, linhas.filter((l) => l.modelo === m).length, `Decisão: não fundir${obs ? `. ${obs}` : ""}`])
   if (raiz && !caminhosExport.size) mud.push(["INFO", null, null, null, "Exportação Magazord não informada: nomes não conferidos"])
   else if (raiz && !caminhosExport.has(nomeRaiz)) mud.push(["INFO", nomeRaiz, null, null, "Raiz não encontrada na exportação Magazord"])
-  writeFileSync(join(saida, `mudancas-corte${corte}.csv`), csvExcel(mud))
+  writeFileSync(join(saida, `mudancas-${sufixo}.csv`), csvExcel(mud))
 
   // 3) Produtos
-  const prod: (string | number | null)[][] = [["codigo", "id", "nome", "ativo", "acao", "categoria_principal_atual", "nova_categoria_principal", "categorias_atuais_manter_como_secundarias", "sistema", "observacao"]]
+  const prod: (string | number | null)[][] = [["codigo", "id", "nome", "ativo", "acao", "categoria_principal_atual", "nova_categoria_principal", "categorias_atuais_manter_como_secundarias", "sistema", "observacao", "filtro_sistema", "breadcrumb_com_links"]]
   const ordemAcao: Record<string, number> = { RECATEGORIZAR: 0, AJUSTAR_PRINCIPAL: 1, DUPLICADO: 2, REVISAR_SEM_MODELO: 3 }
   for (const l of linhas.sort((a, b) => (ordemAcao[a.acao] ?? 9) - (ordemAcao[b.acao] ?? 9) || (a.modelo ?? "").localeCompare(b.modelo ?? ""))) {
     const principal = l.p.categorias[0]
@@ -314,9 +385,13 @@ function main(): void {
       principal !== undefined ? nomeCaminho(principal) : null,
       l.acao === "REVISAR_SEM_MODELO" ? null : destino(l),
       l.p.categorias.map(nomeCaminho).join(" | "), l.sistema, l.obs,
+      l.sistema === SEM_SISTEMA ? "" : l.sistema,
+      l.modelo && l.acao !== "REVISAR_SEM_MODELO"
+        ? `Início (/) > ${nomeRaiz} (${slugMarca ? `/${slugMarca}` : "criar"}) > ${l.modelo} (/${paginaDoModelo.get(l.modelo)?.slug ?? slugify(l.modelo)}${paginaDoModelo.get(l.modelo)?.tipo === "CRIAR" ? ", criar" : ""})`
+        : "",
     ])
   }
-  writeFileSync(join(saida, `produtos-corte${corte}.csv`), csvExcel(prod))
+  writeFileSync(join(saida, `produtos-${sufixo}.csv`), csvExcel(prod))
 
   // 4) Auditoria
   const cont = new Map<string, number>()
@@ -327,7 +402,7 @@ function main(): void {
   md.push(`# Piloto de recategorização: ${nomeRaiz}`, "", "Somente leitura. Nada foi alterado na loja.", "")
   md.push(`- Produtos da marca: ${fmt(linhas.length)} (ativos: ${fmt(linhas.filter((l) => l.p.ativo).length)})`)
   md.push(`- Raiz atual: ${raiz ? `${nomeRaiz} (id ${raiz.id})` : "não existe: criar"}`)
-  md.push(`- Corte para subcategoria de sistema: ${corte} produtos`, "")
+  md.push(modoFiltro ? "- Sistema: filtro (característica do produto), não vira categoria. Árvore: Marca > Modelo" : `- Corte para subcategoria de sistema: ${corte} produtos`, "")
   md.push("## Produtos", "", "| Ação | Produtos | O que significa |", "|---|---|---|")
   const desc: Record<string, string> = {
     RECATEGORIZAR: "Principal hoje é \"Mercado Livre\": passa para a categoria do modelo",
@@ -336,13 +411,12 @@ function main(): void {
     REVISAR_SEM_MODELO: "Nome não traz o modelo: definir manualmente",
   }
   for (const [a, n] of Array.from(cont.entries()).sort((x, y) => (ordemAcao[x[0]] ?? 9) - (ordemAcao[y[0]] ?? 9))) md.push(`| ${a} | ${fmt(n)} | ${desc[a] ?? ""} |`)
-  md.push("", "## Árvore", "", `Arquivo \`categorias-magazord-corte${corte}.csv\` (formato de importação Magazord): ${arvore.length - 1} categorias.`, "")
+  md.push("", "## Árvore", "", `Arquivo \`categorias-magazord-${sufixo}.csv\` (formato de importação Magazord): ${arvore.length - 1} categorias.`, "")
   md.push("| Ação na árvore atual | Itens |", "|---|---|")
   for (const [a, n] of contMud) md.push(`| ${a} | ${fmt(n)} |`)
-  md.push("", "### Modelos finais", "", "| Modelo | Produtos | Observação |", "|---|---|---|")
-  for (const m of modelosFinais) {
-    const n = linhas.filter((l) => l.modelo === m).length
-    md.push(`| ${m} | ${fmt(n)} | ${n === 0 ? "Sem produto hoje: mantida" : ""} |`)
+  md.push("", "### Modelos e páginas públicas (demanda dos últimos 6 meses no GSC)", "", `Página da marca: ${slugMarca ? `/${slugMarca} (existente)` : "criar"}.`, "", "| Modelo | Produtos | Página do modelo | Situação | Cliques nos produtos | Impressões nos produtos | Cliques na página do modelo |", "|---|---|---|---|---|---|---|")
+  for (const x of [...modelosPaginas].sort((a, b) => b.cliquesProd - a.cliquesProd || b.produtos - a.produtos)) {
+    md.push(`| ${x.modelo} | ${fmt(x.produtos)} | /${x.slug} | ${x.tipo === "EXISTENTE" ? "existe" : x.tipo === "APROXIMADA" ? "existe (nome aproximado)" : x.produtos === 0 ? "sem produto hoje" : "criar"} | ${fmt(x.cliquesProd)} | ${fmt(x.impProd)} | ${fmt(x.cliquesPag)} |`)
   }
   const pendentes = revisarFusao.filter(([, b]) => !manterSeparado.has(b))
   if (pendentes.length) {
@@ -355,8 +429,8 @@ function main(): void {
     for (const [m, obs] of manterSeparado) md.push(`- Manter "${m}" separado${obs ? `: ${obs}` : ""}`)
   }
   md.push("", "## Duplicados", "", "Lista para análise caso a caso: `duplicados.csv` (gerar com `npm run audit:duplicados -- --marca <marca>`).", "")
-  md.push("", "## Como aplicar", "", `1. Revisar \`mudancas-corte${corte}.csv\` e as fusões acima.`, `2. Enviar \`categorias-magazord-corte${corte}.csv\` à Magazord para criar/ajustar a árvore.`, `3. Aplicar \`produtos-corte${corte}.csv\`: trocar só a categoria principal; manter as atuais como secundárias.`, "4. Decidir os DUPLICADOS antes de recategorizar as cópias.", "")
-  writeFileSync(join(saida, `auditoria-corte${corte}.md`), md.join("\n"))
+  md.push("", "## Como aplicar", "", `1. Revisar \`mudancas-${sufixo}.csv\` e as fusões acima.`, `2. Enviar \`categorias-magazord-${sufixo}.csv\` à Magazord para criar/ajustar a árvore.`, `3. Aplicar \`produtos-${sufixo}.csv\`: trocar só a categoria principal; manter as atuais como secundárias.`, "4. Decidir os DUPLICADOS antes de recategorizar as cópias.", "")
+  writeFileSync(join(saida, `auditoria-${sufixo}.md`), md.join("\n"))
   console.log(`[piloto] ${nomeRaiz}: ${linhas.length} produtos -> ${saida}`)
 }
 

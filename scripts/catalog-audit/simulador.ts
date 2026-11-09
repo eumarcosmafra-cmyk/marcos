@@ -13,20 +13,23 @@ const SEP = " > "
 const caminho = (s: string) => (s ? s.split(SEP).map((x) => x.trim()).filter(Boolean) : [])
 
 function main(): void {
-  const { values } = parseArgs({ options: { marcas: { type: "string" }, corte: { type: "string" } } })
+  const { values } = parseArgs({ options: { marcas: { type: "string" }, corte: { type: "string" }, sufixo: { type: "string" } } })
   const marcas = (values.marcas ?? "").split(",").map((m) => m.trim().toLowerCase()).filter(Boolean)
   if (!marcas.length) throw new Error("Informe --marcas (ex.: dayun,kasinski)")
-  const corte = values.corte ?? "10"
+  // Sufixo dos arquivos do piloto: "filtro" (Sistema como filtro) ou "corte10" (Sistema como subcategoria)
+  const sufixo = values.sufixo ?? (values.corte ? `corte${values.corte}` : "filtro")
+  const arqPub = join("output", "catalog-audit", "site", "categorias-publicas.txt")
+  const publicas = existsSync(arqPub) ? new Set(readFileSync(arqPub, "utf-8").split(/\r?\n/).map((l) => l.trim()).filter(Boolean)) : new Set<string>()
   const base = join("output", "catalog-audit", "piloto")
 
   const dados = marcas.map((m) => {
     const dir = join(base, m.replace(/\s+/g, "-"))
     const ler = (arq: string) => {
       const f = join(dir, arq)
-      if (!existsSync(f)) throw new Error(`Falta ${f}: rode antes "npm run audit:piloto -- --marca ${m} --corte ${corte}"`)
+      if (!existsSync(f)) throw new Error(`Falta ${f}: rode antes "npm run audit:piloto -- --marca ${m}${sufixo === "filtro" ? " --sistema filtro" : ` --corte ${sufixo.replace("corte", "")}`}"`)
       return lerCsv(readFileSync(f, "utf-8"))
     }
-    const produtos = ler(`produtos-corte${corte}.csv`).map((r) => ({
+    const produtos = ler(`produtos-${sufixo}.csv`).map((r) => ({
       c: r.codigo,
       n: r.nome,
       a: r.ativo === "sim" ? 1 : 0,
@@ -37,9 +40,9 @@ function main(): void {
       o: r.observacao,
       sec: r.categorias_atuais_manter_como_secundarias,
     }))
-    const arvoreCsv = ler(`categorias-magazord-corte${corte}.csv`)
+    const arvoreCsv = ler(`categorias-magazord-${sufixo}.csv`)
     const arvore = arvoreCsv.map((r) => [...caminho(r["Nome Pai"]), r.Nome.trim()])
-    const mudancas = ler(`mudancas-corte${corte}.csv`).map((r) => ({ ac: r.acao, at: r.categoria_atual, nv: r.categoria_nova, n: r.produtos, m: r.motivo }))
+    const mudancas = ler(`mudancas-${sufixo}.csv`).map((r) => ({ ac: r.acao, at: r.categoria_atual, nv: r.categoria_nova, n: r.produtos, m: r.motivo }))
     const duplicados = existsSync(join(dir, "duplicados.csv"))
       ? ler("duplicados.csv").map((r) => ({
           situacao: r.situacao,
@@ -49,7 +52,19 @@ function main(): void {
         }))
       : []
     const nome = arvore[0]?.[0] ?? m.toUpperCase()
-    return { id: m, nome, produtos, arvore, mudancas, duplicados }
+    const paginas: Record<string, { slug: string; tipo: string; cliquesProd: number; impProd: number; cliquesPag: number; impPag: number }> = {}
+    if (existsSync(join(dir, `modelos-paginas-${sufixo}.csv`))) {
+      for (const r of ler(`modelos-paginas-${sufixo}.csv`)) {
+        paginas[r.modelo] = {
+          slug: r.pagina_publica.replace(/^\//, ""), tipo: r.situacao_pagina,
+          cliquesProd: Number(r.cliques_produtos_6m) || 0, impProd: Number(r.impressoes_produtos_6m) || 0,
+          cliquesPag: Number(r.cliques_pagina_modelo_6m) || 0, impPag: Number(r.impressoes_pagina_modelo_6m) || 0,
+        }
+      }
+    }
+    const slugNome = nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+    const slugMarca = publicas.has(slugNome) ? slugNome : null
+    return { id: m, nome, produtos, arvore, mudancas, duplicados, paginas, slugMarca }
   })
 
   const json = JSON.stringify({ geradoEm: new Date().toLocaleDateString("pt-BR"), marcas: dados })
